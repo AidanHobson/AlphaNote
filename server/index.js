@@ -12,6 +12,7 @@ import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields } from './lib/valuation.js';
+import { getInsiderTransactions } from './lib/insider.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -209,6 +210,12 @@ app.get('/api/valuation/market', wrap(async (req, res) => {
 
 app.get('/api/valuation/yields', wrap(async (req, res) => {
   res.json(await getYields());
+}));
+
+// ── Insider Explorer (Form 4 open-market buys/sells, curated universe) ────────
+app.get('/api/insider', wrap(async (req, res) => {
+  if (!requireFinnhub(res)) return;
+  res.json(await getInsiderTransactions());
 }));
 
 // ── Earnings calendar ─────────────────────────────────────────────────────────

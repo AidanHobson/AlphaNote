@@ -44,6 +44,12 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface InsiderTxn {
+  id: string; symbol: string; company: string; sector: string; marketCap: number; insider: string;
+  title: string; isOfficer: boolean; isDirector: boolean; isTenPercent: boolean; plan: string;
+  side: 'Buy' | 'Sell'; code: string; shares: number; price: number; value: number; transactionDate: string; filingDate: string;
+}
+export interface InsiderResponse { generatedAt: string; source: string; count: number; tickers: number; transactions: InsiderTxn[]; }
 export interface Insight {
   symbol: string; provider: string; fellBack: boolean; text: string;
   data: { name: string; price: number; change: number; changePercent: number; currency: string; logo: string };

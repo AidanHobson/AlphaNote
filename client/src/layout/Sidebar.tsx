@@ -11,6 +11,7 @@ const NAV = [
     { to: '/macro', label: 'Macro', ico: '🌐' },
     { to: '/economy', label: 'Economy', ico: '🏛️' },
     { to: '/factors', label: 'Factors', ico: '🧮' },
+    { to: '/insider', label: 'Insider Explorer', ico: '🕵️' },
     { to: '/earnings', label: 'Earnings', ico: '📅' },
   ]},
   { group: 'Research', items: [

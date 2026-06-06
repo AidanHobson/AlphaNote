@@ -10,6 +10,7 @@ const Macro = lazy(() => import('./pages/Macro'));
 const Economy = lazy(() => import('./pages/Economy'));
 const Factors = lazy(() => import('./pages/Factors'));
 const Earnings = lazy(() => import('./pages/Earnings'));
+const Insider = lazy(() => import('./pages/Insider'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Notes = lazy(() => import('./pages/Notes'));
 
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'economy', element: <Economy /> },
       { path: 'factors', element: <Factors /> },
       { path: 'earnings', element: <Earnings /> },
+      { path: 'insider', element: <Insider /> },
       { path: 'watchlist', element: <Watchlist /> },
       { path: 'notes', element: <Notes /> },
       { path: '*', element: <Navigate to="/daily-update" replace /> },
