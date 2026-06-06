@@ -1,9 +1,12 @@
-// Insider Explorer — market-wide Form 4 insider transactions from SEC EDGAR.
-// EDGAR's "getcurrent" feed lists the most recent Form 4 filings across ALL
-// issuers; we fetch each submission, parse the standardized ownershipDocument
-// XML, and extract issuer/insider/role/side/shares/price + the 10b5-1 plan flag.
-// Market cap & sector are best-effort enriched via Finnhub (bounded).
+// Insider Explorer — market-wide Form 4 insider transactions (open-market P/S).
+// Primary source: sec-api.io's structured insider-trading API (when SEC_API_KEY
+// is set) — fast, parsed, paginated across the whole market. Fallback: parse SEC
+// EDGAR's daily index directly (no key). Both produce the same record shape, then
+// a shared finalize() best-effort enriches market cap/sector via Finnhub.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getCompanyProfile } from './finnhub.js';
 
 const SEC = 'https://www.sec.gov';
@@ -117,16 +120,12 @@ function parseForm4(txt) {
   return { symbol, company, insider, title, isOfficer, isDirector, isTenPercent, plan, filingDate, txns };
 }
 
-let cache = { t: 0, data: null };
-
-export async function getInsiderTransactions() {
-  if (cache.data && Date.now() - cache.t < 3 * 3600_000) return cache.data; // 3h cache (heavy scan)
-
+// ── Fallback path: parse SEC EDGAR's daily index directly (no key needed) ─────
+async function edgarInsider() {
   const urls = await dailyIndexFilings(320);
   const txts = await mapLimit(urls, 6, async (u) => {
     try { return await secFetch(u); } catch { return null; }
   });
-
   const txns = [];
   for (const txt of txts) {
     if (!txt) continue;
@@ -142,25 +141,204 @@ export async function getInsiderTransactions() {
       });
     }
   }
+  return txns;
+}
 
-  // Best-effort market-cap / sector enrichment for the most common tickers.
-  const uniq = [...new Set(txns.map((t) => t.symbol))].slice(0, 60);
+// ── Primary path: sec-api.io structured Form 4 data (when SEC_API_KEY is set) ─
+function roleOf(rel = {}) {
+  const roles = [];
+  if (rel.isDirector) roles.push('Director');
+  if (rel.isOfficer) roles.push(rel.officerTitle || 'Officer');
+  if (rel.isTenPercentOwner) roles.push('10% Owner');
+  if (!roles.length && rel.isOther) roles.push(rel.otherText || 'Other');
+  return roles.join(', ') || 'Other';
+}
+
+async function secApiPage(from, size) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`https://api.sec-api.io/insider-trading?token=${process.env.SEC_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'nonDerivativeTable.transactions.coding.code:(P OR S)', // filings with open-market buys/sells
+        from: String(from), size: String(size),
+        sort: [{ filedAt: { order: 'desc' } }],
+      }),
+    });
+    if (res.status === 429 && attempt < 1) { await new Promise((r) => setTimeout(r, 1500)); continue; }
+    if (!res.ok) { const e = new Error(`sec-api.io ${res.status}`); e.status = res.status; throw e; }
+    return res.json();
+  }
+}
+
+// sec-api.io caps size at 50, so breadth comes from page count. Pages are
+// independent (different `from` offsets), so we fetch them with light concurrency.
+// `from + size` must stay <= 10000 (Elasticsearch window), i.e. pages <= ~199.
+async function secApiInsider(pages = 40, size = 50) {
+  const maxPages = Math.min(pages, Math.floor(10000 / size));
+  const offsets = Array.from({ length: maxPages }, (_, p) => p * size);
+  const pagesData = await mapLimit(offsets, 2, async (from) => { // gentle concurrency (free-plan quota)
+    try { return await secApiPage(from, size); }
+    catch (e) { if (from === 0) throw e; return null; } // first page must work, else fall back to EDGAR
+  });
+
+  const txns = [];
+  for (const data of pagesData) {
+    for (const f of data?.transactions || []) {
+      const symbol = (f.issuer?.tradingSymbol || '').toUpperCase();
+      if (!symbol) continue;
+      const rel = f.reportingOwner?.relationship || {};
+      const company = f.issuer?.name || symbol;
+      const insider = f.reportingOwner?.name || '—';
+      const title = roleOf(rel);
+      const plan = f.aff10b5One === true || /10b5-1/i.test(JSON.stringify(f.footnotes || '')) ? '10b5-1' : 'Discretionary';
+      const filingDate = (f.filedAt || '').slice(0, 10);
+      for (const tr of f.nonDerivativeTable?.transactions || []) {
+        const code = tr.coding?.code;
+        if (code !== 'P' && code !== 'S') continue;
+        const shares = tr.amounts?.shares || 0;
+        const price = tr.amounts?.pricePerShare || 0;
+        if (!shares) continue;
+        const value = Math.round(shares * price);
+        txns.push({
+          id: `${f.accessionNo}-${symbol}-${tr.transactionDate}-${shares}-${code}-${value}`,
+          symbol, company, sector: '', marketCap: 0, insider, title,
+          isOfficer: !!rel.isOfficer, isDirector: !!rel.isDirector, isTenPercent: !!rel.isTenPercentOwner,
+          plan, side: code === 'P' ? 'Buy' : 'Sell', code, shares, price, value,
+          transactionDate: tr.transactionDate || '', filingDate,
+        });
+      }
+    }
+  }
+  return txns;
+}
+
+// ── Backup path: API Ninjas insider-transactions (per-ticker → curated universe)
+// Used when sec-api.io is unavailable. No 10b5-1 flag, so plan defaults to
+// "Discretionary"; role is inferred from the insider's position string.
+const INSIDER_UNIVERSE = [
+  // Tech / comms
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'NFLX', 'CRM',
+  'ORCL', 'ADBE', 'INTC', 'CSCO', 'AVGO', 'QCOM', 'TXN', 'MU', 'PLTR', 'SNOW',
+  'CRWD', 'NET', 'DDOG', 'PANW', 'ZS', 'UBER', 'ABNB', 'COIN', 'SHOP', 'PYPL',
+  'T', 'VZ', 'CMCSA', 'TMUS',
+  // Financials
+  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'V', 'MA', 'AXP', 'BLK', 'SCHW', 'SPGI',
+  // Healthcare
+  'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD',
+  // Consumer
+  'WMT', 'COST', 'HD', 'LOW', 'NKE', 'MCD', 'SBUX', 'DIS', 'KO', 'PEP', 'PG', 'TGT',
+  // Industrials / energy
+  'XOM', 'CVX', 'COP', 'CAT', 'BA', 'GE', 'HON', 'DE', 'LMT', 'RTX', 'UNP', 'UPS',
+];
+
+function ninjasRole(pos = '') {
+  const p = pos.toLowerCase();
+  return {
+    isDirector: /director/.test(p),
+    isOfficer: /officer|president|chief|ceo|cfo|coo|cto|chairman|treasurer|secretary|\bvp\b|principal/.test(p),
+    isTenPercent: /10%|ten percent|10 percent/.test(p),
+  };
+}
+
+async function apiNinjasInsider() {
+  const results = await mapLimit(INSIDER_UNIVERSE, 5, async (ticker) => {
+    try {
+      const res = await fetch(`https://api.api-ninjas.com/v1/insidertransactions?ticker=${ticker}&limit=100`, { headers: { 'X-Api-Key': process.env.NINJAS_API_KEY } });
+      if (res.status === 401 || res.status === 403) throw new Error(`api-ninjas ${res.status}`); // bad key → abort
+      if (!res.ok) return [];
+      return res.json();
+    } catch (e) { if (/\b40[13]\b/.test(e.message)) throw e; return []; }
+  });
+
+  const txns = [];
+  for (const rows of results) {
+    for (const r of rows || []) {
+      const code = r.transaction_code;
+      if (code !== 'P' && code !== 'S') continue; // open-market buys/sells only
+      const shares = r.shares || 0;
+      const price = r.transaction_price || 0;
+      if (!shares) continue;
+      const value = Math.round(r.transaction_value || shares * price);
+      const role = ninjasRole(r.insider_position);
+      txns.push({
+        id: `${r.accession_number}-${r.ticker}-${r.filing_date}-${shares}-${code}-${value}`,
+        symbol: (r.ticker || '').toUpperCase(), company: r.company_name || r.ticker, sector: '', marketCap: 0,
+        insider: r.insider_name || '—', title: r.insider_position || 'Other',
+        isOfficer: role.isOfficer, isDirector: role.isDirector, isTenPercent: role.isTenPercent,
+        plan: 'Discretionary',
+        side: code === 'P' ? 'Buy' : 'Sell', code, shares, price, value,
+        transactionDate: r.filing_date || '', filingDate: r.filing_date || '',
+      });
+    }
+  }
+  return txns;
+}
+
+// ── Shared: enrich (market cap/sector), sort, shape ──────────────────────────
+async function finalize(txns, source) {
+  const uniq = [...new Set(txns.map((t) => t.symbol))].slice(0, 90);
   const profiles = {};
   await mapLimit(uniq, 3, async (sym) => { const p = await getCompanyProfile(sym).catch(() => null); if (p) profiles[sym] = p; });
   for (const t of txns) {
     const p = profiles[t.symbol];
     if (p) { t.sector = p.finnhubIndustry || ''; t.marketCap = p.marketCapitalization || 0; if ((!t.company || t.company.length < 2) && p.name) t.company = p.name; }
   }
-
   txns.sort((a, b) => (b.filingDate || '').localeCompare(a.filingDate || '') || (b.transactionDate || '').localeCompare(a.transactionDate || ''));
-
-  const data = {
+  return {
     generatedAt: new Date().toISOString(),
-    source: 'SEC EDGAR — recent Form 4 filings (market-wide)',
+    source,
     count: txns.length,
     tickers: new Set(txns.map((t) => t.symbol)).size,
-    transactions: txns.slice(0, 800),
+    transactions: txns.slice(0, 12000),
   };
-  if (txns.length) cache = { t: Date.now(), data };
+}
+
+// In-memory + disk cache. The disk copy lets a freshly-started server process
+// (e.g. after a restart) serve the last result instantly instead of doing the
+// multi-second cold scan again.
+let cache = { t: 0, ttl: 0, data: null };
+// Project-relative (not os.tmpdir) so every server process — however launched —
+// shares the same cache file.
+const DISK_CACHE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.insider-cache.json');
+
+function readDiskCache() {
+  try {
+    const e = JSON.parse(fs.readFileSync(DISK_CACHE, 'utf8'));
+    if (e && e.t && e.data && Date.now() - e.t < (e.ttl || 0)) return e;
+  } catch { /* missing/stale */ }
+  return null;
+}
+
+export async function getInsiderTransactions() {
+  if (cache.data && Date.now() - cache.t < cache.ttl) return cache.data;
+  const disk = readDiskCache();
+  if (disk) { cache = disk; return disk.data; }
+
+  let txns = [];
+  let source = '';
+  if (/\S/.test(process.env.SEC_API_KEY || '')) {
+    // ~50 filings/page. Default kept modest because the free sec-api plan has a
+    // query quota; raise INSIDER_PAGES (max ~199) on a paid plan for far more.
+    const pages = Math.max(1, parseInt(process.env.INSIDER_PAGES, 10) || 24);
+    try { txns = await secApiInsider(pages, 50); source = 'sec-api.io — market-wide Form 4'; }
+    catch (e) { console.warn('sec-api.io unavailable:', e.message); }
+  }
+  // Backup 1: API Ninjas (curated universe) when sec-api returned nothing.
+  if (!txns.length && /\S/.test(process.env.NINJAS_API_KEY || '')) {
+    try { txns = await apiNinjasInsider(); source = 'API Ninjas — insider transactions (curated universe)'; }
+    catch (e) { console.warn('API Ninjas unavailable, falling back to EDGAR:', e.message); }
+  }
+  // Backup 2 (no key needed): parse SEC EDGAR's daily index directly.
+  if (!txns.length) { txns = await edgarInsider(); source = 'SEC EDGAR — daily index (market-wide)'; }
+
+  const data = await finalize(txns, source);
+  // Cache a good sec-api pull for 12h (conserve quota); cache backups more briefly
+  // so we retry the richer primary sooner once its quota resets.
+  const ttl = source.startsWith('sec-api') ? 12 * 3600_000 : source.startsWith('API Ninjas') ? 2 * 3600_000 : 30 * 60_000;
+  if (txns.length) {
+    cache = { t: Date.now(), ttl, data };
+    try { fs.writeFileSync(DISK_CACHE, JSON.stringify(cache)); } catch { /* non-fatal */ }
+  }
   return data;
 }

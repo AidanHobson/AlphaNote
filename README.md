@@ -30,7 +30,7 @@ write and **export as a Markdown report** enriched with live quotes.
 | **Macro** | Cross-asset dashboard: computed tone, **AI Macro Read**, Plotly cross-asset returns, grouped tables (Equity Indices, Rates & Credit, FX, Commodities, Crypto) via liquid ETF proxies | ReturnSignal "Macro" + grouped market tables + OpenStock data/AI |
 | **Factors** | Style-factor leadership, **AI Factor Read**, Plotly single-factor returns + long/short rotation spreads (Value−Growth, Small−Large, High Beta−Low Vol…) via factor-ETF proxies | ReturnSignal "Factors" + OpenStock data/AI |
 | **Economy** | US macro indicator cards with history, **AI Economic Read**, a **live Treasury yield curve**, and an economic-release calendar (high/medium impact, country flags, actual/est/prev). Indicators come from **FRED** (monthly) when `FRED_API_KEY` is set, else **World Bank** (annual) — no key needed | ReturnSignal "Economic Data" + FRED/World Bank + Finnhub |
-| **Insider Explorer** | **Market-wide** Form 4 insider buys/sells (SEC EDGAR) — Transactions / By-Company / By-Insider views; filters for time, side, **plan (Discretionary/10b5-1)**, **role (officers/directors)**, exclude-10%-holders, ticker, insider, market cap, min $; role/title + plan columns, summary stats, CSV export | ReturnSignal "Insider Explorer" + SEC EDGAR Form 4 |
+| **Insider Explorer** | **Market-wide** Form 4 insider buys/sells (sec-api.io → API Ninjas → EDGAR fallback chain) — Transactions / By-Company / By-Insider views; filters for time, side, **plan (Discretionary/10b5-1)**, **role (officers/directors)**, exclude-10%-holders, ticker, insider, market cap, min $; role/title + plan columns, summary stats, CSV export | ReturnSignal "Insider Explorer" + SEC EDGAR Form 4 |
 | **Earnings Calendar** | Upcoming reports (3 wks) grouped by date with before/after-market timing + EPS/revenue estimates; Notable / My-watchlist filter | ReturnSignal "Earnings Calendar" + Finnhub `/calendar/earnings` |
 | **Watchlist** | Per-device list with a Plotly returns chart + table | OpenStock watchlist + ReturnSignal Plotly |
 | **Research Notes** | Per-ticker notes + **Markdown report export** (enriched with live quotes) | ReturnSignal ReportMarkdown + AlphaNote notes |
@@ -104,7 +104,7 @@ alphanote/
 | `GET` | `/api/factors` | Factor returns + long/short rotation spreads |
 | `GET` | `/api/factors/brief` | **AI Factor Read** (Claude → Gemini) |
 | `GET` | `/api/earnings?days=&symbols=` | Earnings calendar (analyst-covered + watchlist) |
-| `GET` | `/api/insider` | Market-wide Form 4 insider buys/sells (SEC EDGAR daily index, parsed + enriched, cached 3h) |
+| `GET` | `/api/insider` | Market-wide Form 4 insider buys/sells (sec-api.io primary, EDGAR fallback; enriched + cached) |
 | `GET` | `/api/economy/indicators` | Macro indicators with history (World Bank, no key) |
 | `GET` | `/api/economy/calendar?days=` | Economic release calendar, high/medium impact |
 | `GET` | `/api/economy/yield-curve` | Live US Treasury yield curve + 2s10s (FRED; graceful if no key) |
@@ -179,13 +179,21 @@ Health check: `curl -s localhost:8080/api/health`
   The **Market** and **Yields** tabs are fully live on free data; the remaining lenses
   (Valuation/Quality/Leverage/Growth/Size by sector & country) need a premium per-company
   fundamentals dataset and show an honest placeholder.
-- **Insider data:** the Insider Explorer is **market-wide via SEC EDGAR** — it reads the
-  daily Form 4 index (~2k filings/~1.4k companies a day), samples broadly across issuers,
-  fetches each submission, and parses the standardized ownershipDocument XML for issuer /
-  insider / **role & title** / open-market buy-sell (codes P/S) / shares / price + the
-  **10b5-1 plan** flag (from the footnotes). Requests are globally rate-gated (~8/s, under
-  SEC's 10/s limit) with 429 backoff, and the whole scan is cached 3h (first load ~30s).
-  Market cap & sector are best-effort enriched via Finnhub.
+- **Insider data:** the Insider Explorer is **market-wide**, with a 3-tier fallback chain so
+  it keeps working if any source is down:
+  1. **sec-api.io** (`SEC_API_KEY`) — structured Form 4 API, paginated; parses issuer / insider
+     / **role & title** / code / shares / price + the **10b5-1 plan** flag (`aff10b5One`).
+     Yields ~**1,600+ transactions across ~400 companies** in seconds. (Raise `INSIDER_PAGES`
+     for even more on a paid plan.)
+  2. **API Ninjas** (`NINJAS_API_KEY`) — per-ticker insider transactions (`limit=100`)
+     aggregated across a curated ~85-name universe → **~2,000+ transactions / ~2 years of
+     history across ~80 companies**; role inferred from the insider's position; used when
+     sec-api is unavailable (e.g. quota exhausted).
+  3. **SEC EDGAR daily index** (no key) — parses Form 4 submissions directly; final fallback.
+  Results are cached in memory **and on disk** (`.insider-cache.json` at the project root, so
+  every server process shares it), letting a restarted server serve the last scan instantly.
+  The Transactions table supports 7-day / 30 / 90 / 1Y / All time windows. Market cap & sector
+  are best-effort enriched via Finnhub.
 - **Economic data:** Finnhub's `/calendar/economic` *is* free on this tier (used for the
   release calendar). Macro indicator *levels* prefer **FRED** (monthly CPI/Core CPI,
   unemployment, Fed funds, GDP, 10Y + a live Treasury yield curve) when `FRED_API_KEY` is

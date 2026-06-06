@@ -13,3 +13,6 @@
 *.log
 npm-debug.log*
 .DS_Store
+
+# server-side disk cache
+.insider-cache.json

@@ -59,7 +59,7 @@ export default function Insider() {
 
   const filtered = useMemo(() => {
     if (!data) return [];
-    const nDays = days === '7 Days' ? 7 : days === '90 Days' ? 90 : 30;
+    const nDays = days === '7 Days' ? 7 : days === '90 Days' ? 90 : days === '1Y' ? 365 : days === 'All' ? 100000 : 30;
     const cutoff = new Date(Date.now() - nDays * 86400000).toISOString().slice(0, 10);
     const tickers = ticker.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
     const name = insider.trim().toLowerCase();
@@ -83,7 +83,7 @@ export default function Insider() {
     });
   }, [data, days, side, plan, role, excludePE, ticker, insider, capMin, capMax, minDollar]);
 
-  const shown = filtered.slice(0, 200);
+  const shown = filtered.slice(0, 500);
   const stats = useMemo(() => ({
     total: filtered.length,
     dollars: shown.reduce((s, t) => s + t.value, 0),
@@ -115,7 +115,7 @@ export default function Insider() {
 
       <Card style={{ marginBottom: 16 }}>
         <div className="row" style={{ gap: 14, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-          <Seg options={['7 Days', '30 Days', '90 Days']} value={days} onChange={setDays} />
+          <Seg options={['7 Days', '30 Days', '90 Days', '1Y', 'All']} value={days} onChange={setDays} />
           <Seg options={['All', 'Buys', 'Sells']} value={side} onChange={setSide} />
           <Seg options={['All Plans', 'Discretionary', '10b5-1']} value={plan} onChange={setPlan} />
           <Seg options={['Any Role', 'Officers', 'Directors']} value={role} onChange={setRole} />
