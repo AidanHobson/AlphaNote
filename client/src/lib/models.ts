@@ -1,0 +1,50 @@
+export interface SearchResult { symbol: string; name: string; exchange: string; type: string; }
+export interface Quote { c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number; }
+export interface Profile { name?: string; ticker?: string; exchange?: string; currency?: string; logo?: string; marketCapitalization?: number; finnhubIndustry?: string; country?: string; weburl?: string; }
+export interface MoverItem {
+  symbol: string; name: string; price: number; change: number; changePercent: number;
+  currency: string; logo: string; exchange: string; marketCap: number;
+}
+export interface NewsArticle { id: number; headline: string; summary: string; source: string; url: string; datetime: number; }
+export interface Regime { label: string; breadth: number; avgChange: number; advancers: number; decliners: number; total: number; }
+export interface MarketBrief { generatedAt: string; regime: Regime; provider: string; fellBack: boolean; text: string; movers: MoverItem[]; }
+export interface MacroItem { symbol: string; label: string; price: number; change: number; changePercent: number; }
+export interface MacroGroup { name: string; items: MacroItem[]; }
+export interface MacroTone { tone: string; equities: number; gold: number; tlt: number; hyg: number; dollar: number; oil: number; }
+export interface MacroBoard { groups: MacroGroup[]; tone: MacroTone; }
+export interface MacroBrief { generatedAt: string; tone: MacroTone; provider: string; fellBack: boolean; text: string; }
+export interface FactorItem { symbol: string; label: string; changePercent: number; price: number; }
+export interface FactorSpread { label: string; long: string; short: string; value: number; }
+export interface FactorBoard { factors: FactorItem[]; spreads: FactorSpread[]; leader: FactorItem; laggard: FactorItem; market: number; }
+export interface FactorBrief { generatedAt: string; leader: FactorItem; laggard: FactorItem; provider: string; fellBack: boolean; text: string; }
+export interface EarningsItem {
+  date: string; symbol: string; hour: string; epsEstimate: number | null; epsActual: number | null;
+  revenueEstimate: number | null; quarter: number | null; year: number | null; hasEstimate: boolean; inWatchlist: boolean;
+}
+export interface EarningsResponse { from: string; days: number; count: number; items: EarningsItem[]; }
+export interface AnalystConsensus { label: string; score: number; total: number; }
+export interface AnalystPeriod { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; consensus: AnalystConsensus; }
+export interface AnalystRatings {
+  symbol: string; hasCoverage: boolean; consensus: AnalystConsensus;
+  latest: { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number } | null;
+  history: AnalystPeriod[]; priceTargetNote: string;
+}
+export interface IndicatorPoint { year: string; value: number; }
+export interface Indicator { code: string; label: string; unit: string; good: 'low' | 'high' | 'neutral'; country: string; freq?: string; latest: IndicatorPoint | null; prev: IndicatorPoint | null; history: IndicatorPoint[]; }
+export interface IndicatorsResponse { country: string; source: string; indicators: Indicator[]; }
+export interface YieldPoint { label: string; years: number; value: number; prior: number | null; }
+export interface YieldCurve { available: boolean; reason?: string; asOf?: string | null; curve: YieldPoint[]; spread2s10s?: number | null; inverted?: boolean | null; }
+export interface EconEvent { date: string; time: string; country: string; event: string; impact: string; actual: number | null; estimate: number | null; prev: number | null; unit: string; }
+export interface EconCalendar { days: number; count: number; highCount: number; items: EconEvent[]; }
+export interface EconBrief { generatedAt: string; provider: string; fellBack: boolean; text: string; }
+export interface ValMetric {
+  key: string; label: string; unit: string; description: string; available: boolean; reason?: string;
+  asOf: string; asOfDate: string; value: number; mom: number;
+  valuePercentile: number; richPercentile: number; richWhen: 'high' | 'low';
+  spark: number[]; history: { date: string; value: number }[];
+}
+export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface Insight {
+  symbol: string; provider: string; fellBack: boolean; text: string;
+  data: { name: string; price: number; change: number; changePercent: number; currency: string; logo: string };
+}
