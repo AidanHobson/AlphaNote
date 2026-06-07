@@ -77,7 +77,7 @@ async function dailyIndexFilings(target = 170, lookbackDays = 6) {
 const between = (s, tag) => { const m = s.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`)); return m ? m[1].trim() : ''; };
 const amount = (block) => { const m = block.match(/<value>\s*([\d.]+)\s*<\/value>/); return m ? parseFloat(m[1]) : 0; };
 
-function parseForm4(txt) {
+export function parseForm4(txt) {
   const docM = txt.match(/<ownershipDocument>[\s\S]*?<\/ownershipDocument>/);
   if (!docM) return null;
   const doc = docM[0];
@@ -145,7 +145,7 @@ async function edgarInsider() {
 }
 
 // ── Primary path: sec-api.io structured Form 4 data (when SEC_API_KEY is set) ─
-function roleOf(rel = {}) {
+export function roleOf(rel = {}) {
   const roles = [];
   if (rel.isDirector) roles.push('Director');
   if (rel.isOfficer) roles.push(rel.officerTitle || 'Officer');
@@ -232,11 +232,12 @@ const INSIDER_UNIVERSE = [
   'XOM', 'CVX', 'COP', 'CAT', 'BA', 'GE', 'HON', 'DE', 'LMT', 'RTX', 'UNP', 'UPS',
 ];
 
-function ninjasRole(pos = '') {
+export function ninjasRole(pos = '') {
   const p = pos.toLowerCase();
   return {
     isDirector: /director/.test(p),
-    isOfficer: /officer|president|chief|ceo|cfo|coo|cto|chairman|treasurer|secretary|\bvp\b|principal/.test(p),
+    // Word-boundary the short abbreviations so e.g. "cto" doesn't match inside "director".
+    isOfficer: /officer|president|chief|chairman|treasurer|secretary|principal|\b(?:ceo|cfo|coo|cto|cio|evp|svp|vp)\b/.test(p),
     isTenPercent: /10%|ten percent|10 percent/.test(p),
   };
 }

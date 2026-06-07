@@ -69,11 +69,11 @@ async function buffettSeries() {
 }
 
 // ── stats helpers ─────────────────────────────────────────────────────────────
-function percentileOf(valuesAsc, x) {
+export function percentileOf(valuesAsc, x) {
   let lo = 0; for (const v of valuesAsc) if (v <= x) lo++; else break;
   return Math.round((lo / valuesAsc.length) * 100);
 }
-function downsample(arr, n) {
+export function downsample(arr, n) {
   if (arr.length <= n) return arr;
   const step = (arr.length - 1) / (n - 1);
   return Array.from({ length: n }, (_, i) => arr[Math.round(i * step)]);

@@ -1,7 +1,10 @@
 import './lib/env.js'; // load .env (override) before anything reads process.env
 import express from 'express';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cached } from './lib/apicache.js';
 
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
 import { generateStockInsight } from './lib/insight.js';
@@ -21,12 +24,26 @@ const PORT = process.env.PORT || 8080;
 const isProd = process.env.NODE_ENV === 'production';
 
 app.disable('x-powered-by');
+app.use(compression()); // gzip responses (the data endpoints ship large JSON)
 app.use(express.json({ limit: '256kb' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// A generous overall cap on /api to absorb bursts, plus a much stricter cap on
+// the AI endpoints (each call costs real money on Claude/Gemini).
+const apiLimiter = rateLimit({
+  windowMs: 60_000, max: 300, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many requests — please slow down.' },
+});
+const aiLimiter = rateLimit({
+  windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'AI request limit reached — please wait a minute.' },
+});
+app.use('/api', apiLimiter);
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 function requireFinnhub(res) {
@@ -118,7 +135,7 @@ app.get('/api/analyst/:symbol', wrap(async (req, res) => {
 }));
 
 // ── AI: per-stock insight (OpenStock) ─────────────────────────────────────────
-app.post('/api/ai/insight', wrap(async (req, res) => {
+app.post('/api/ai/insight', aiLimiter, wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const symbol = req.body?.symbol;
   if (!symbol) return res.status(400).json({ error: 'Please provide a stock symbol.' });
@@ -126,7 +143,7 @@ app.post('/api/ai/insight', wrap(async (req, res) => {
     return res.status(503).json({ error: 'AI insights unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateStockInsight(symbol));
+    res.json(await cached(`insight:${String(symbol).toUpperCase()}`, 30 * 60_000, () => generateStockInsight(symbol)));
   } catch (err) {
     const status = err.statusCode || 502;
     console.error('insight failed:', err.message);
@@ -143,13 +160,13 @@ app.get('/api/macro', wrap(async (req, res) => {
 }));
 
 // ── AI: macro read (cross-asset narrative) ────────────────────────────────────
-app.get('/api/macro/brief', wrap(async (req, res) => {
+app.get('/api/macro/brief', aiLimiter, wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
   if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
     return res.status(503).json({ error: 'Macro read unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateMacroBrief());
+    res.json(await cached('brief:macro', 15 * 60_000, generateMacroBrief));
   } catch (err) {
     console.error('macro brief failed:', err.message);
     res.status(502).json({ error: 'Could not generate the macro read right now. Please try again.' });
@@ -162,13 +179,13 @@ app.get('/api/factors', wrap(async (req, res) => {
   res.json(await getFactorBoard());
 }));
 
-app.get('/api/factors/brief', wrap(async (req, res) => {
+app.get('/api/factors/brief', aiLimiter, wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
   if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
     return res.status(503).json({ error: 'Factor read unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateFactorBrief());
+    res.json(await cached('brief:factors', 15 * 60_000, generateFactorBrief));
   } catch (err) {
     console.error('factor brief failed:', err.message);
     res.status(502).json({ error: 'Could not generate the factor read right now. Please try again.' });
@@ -190,13 +207,13 @@ app.get('/api/economy/yield-curve', wrap(async (req, res) => {
   res.json(await getYieldCurve());
 }));
 
-app.get('/api/economy/brief', wrap(async (req, res) => {
+app.get('/api/economy/brief', aiLimiter, wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
   if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
     return res.status(503).json({ error: 'Economic read unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateEconomicBrief());
+    res.json(await cached('brief:economy', 15 * 60_000, generateEconomicBrief));
   } catch (err) {
     console.error('economic brief failed:', err.message);
     res.status(502).json({ error: 'Could not generate the economic read right now. Please try again.' });
@@ -227,13 +244,13 @@ app.get('/api/earnings', wrap(async (req, res) => {
 }));
 
 // ── AI: market brief / narrative pulse (hybrid) ───────────────────────────────
-app.get('/api/market/brief', wrap(async (req, res) => {
+app.get('/api/market/brief', aiLimiter, wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
   if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
     return res.status(503).json({ error: 'Market brief unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateMarketBrief());
+    res.json(await cached('brief:market', 15 * 60_000, generateMarketBrief));
   } catch (err) {
     console.error('brief failed:', err.message);
     res.status(502).json({ error: 'Could not generate the market brief right now. Please try again.' });

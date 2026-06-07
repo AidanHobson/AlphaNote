@@ -201,10 +201,20 @@ Health check: `curl -s localhost:8080/api/health`
   labeled with their vintage). An invalid/blank FRED key safely degrades to World Bank, and
   the yield-curve card shows a "needs FRED" note rather than a blank chart.
 
-## 🔐 Security
+## 🔐 Security & hardening
 - Keys live only in the gitignored `.env`; the browser never sees them.
 - All third-party text (news, AI output) is rendered through React (escaped).
 - `.env.example` ships placeholders only. **Rotate any key shared in plaintext.**
+- **Rate limiting** (`express-rate-limit`): 300 req/min per IP on `/api/*`, and a
+  stricter **20 req/min on the AI endpoints** (each call costs money on Claude/Gemini).
+- **AI responses are cached** server-side (per-stock insights 30 min; market/macro/
+  factor/economy briefs 15 min), so repeated views don't re-bill the model.
+- **gzip** (`compression`) on all responses — the data payloads shrink ~90%.
+
+## 🧪 Tests
+`npm test` runs the vitest suite (`tests/`) — unit tests for the pure parsing/transform
+functions (Form 4 parsing, valuation percentiles, role inference, provider config,
+formatters), i.e. the spots where bugs are easiest to introduce.
 
 ## 🩺 Troubleshooting
 - *"Market data unavailable"* → `FINNHUB_API_KEY` missing/invalid.
