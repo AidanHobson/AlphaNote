@@ -97,10 +97,10 @@ export default function DailyUpdate() {
           </Card>
 
           {/* Equities table */}
-          <Card title="Equities">
+          <Card title="Equities" sub={movers ? `${movers.length} names` : ''}>
             {moversError ? <div className="error-banner">{moversError}</div>
               : !movers ? <SkeletonLines lines={6} />
-              : <MarketTable items={movers.slice(0, 8)} showCap={false} />}
+              : <MarketTable items={movers.slice(0, 15)} showCap={false} />}
           </Card>
         </div>
       )}

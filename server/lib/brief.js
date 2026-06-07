@@ -8,8 +8,17 @@ import { POPULAR_STOCK_SYMBOLS } from './constants.js';
 
 // A representative basket used for breadth/regime + the movers table.
 export const MARKET_BASKET = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'NFLX',
-  'JPM', 'BAC', 'V', 'WMT', 'XOM', 'AMD', 'CRM', 'ORCL',
+  // Tech / comms
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'NFLX', 'AMD', 'CRM',
+  'ORCL', 'ADBE', 'AVGO', 'QCOM', 'PLTR',
+  // Financials
+  'JPM', 'BAC', 'WFC', 'GS', 'V', 'MA',
+  // Healthcare
+  'UNH', 'JNJ', 'LLY', 'PFE', 'ABBV',
+  // Consumer
+  'WMT', 'HD', 'COST', 'NKE', 'MCD', 'DIS',
+  // Energy / industrials
+  'XOM', 'CVX', 'CAT', 'BA',
 ];
 
 // Deterministic market-regime read from cross-sectional breadth (no AI, no candles).
@@ -26,6 +35,22 @@ export function computeRegime(items) {
   else if (avgChange > 0.4) label = 'Risk-on';
   else if (avgChange < -0.4) label = 'Risk-off';
   return { label, breadth, avgChange, advancers, decliners, total: valid.length };
+}
+
+// Cross-sectional movers board (quotes + regime). Cached briefly, but an empty
+// result (e.g. a transient Finnhub rate-limit) is NOT cached, so the page keeps
+// the last good board instead of showing nothing.
+let moversCache = { t: 0, data: null };
+export async function getMoversBoard(symbols = MARKET_BASKET, useCache = true) {
+  if (useCache && moversCache.data && Date.now() - moversCache.t < 20_000) return moversCache.data;
+  const items = (await getWatchlistData(symbols)).filter((i) => i.price > 0);
+  const regime = computeRegime(items);
+  items.sort((a, b) => b.changePercent - a.changePercent);
+  const data = { items, regime };
+  // Only cache a reasonably-complete board — a big shortfall usually means a
+  // transient rate-limit, and we don't want to pin a partial result for 20s.
+  if (useCache && items.length >= Math.ceil(symbols.length * 0.8)) moversCache = { t: Date.now(), data };
+  return data;
 }
 
 const SYSTEM_PROMPT = `You are the market-desk writer for AlphaNote, a markets research dashboard.

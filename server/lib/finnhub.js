@@ -61,13 +61,18 @@ export async function getCompanyProfile(symbol) {
   }
 }
 
-// Combined quote + profile for a set of symbols (used by the watchlist).
+// Combined quote + profile for a set of symbols (used by the watchlist & movers).
+// Concurrency-limited so large baskets don't burst Finnhub's free-tier rate limit.
 export async function getWatchlistData(symbols) {
   if (!symbols || symbols.length === 0) return [];
-  return Promise.all(
-    symbols.map(async (sym) => {
+  const out = new Array(symbols.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < symbols.length) {
+      const idx = i++;
+      const sym = symbols[idx];
       const [quote, profile] = await Promise.all([getQuote(sym), getCompanyProfile(sym)]);
-      return {
+      out[idx] = {
         symbol: sym,
         price: quote?.c || 0,
         change: quote?.d || 0,
@@ -82,8 +87,10 @@ export async function getWatchlistData(symbols) {
         exchange: profile?.exchange || '',
         marketCap: profile?.marketCapitalization || 0,
       };
-    })
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, symbols.length) }, worker));
+  return out;
 }
 
 // Market / company news (round-robin across symbols, capped at 6) — ported.

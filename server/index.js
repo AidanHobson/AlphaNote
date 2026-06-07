@@ -8,7 +8,7 @@ import { cached } from './lib/apicache.js';
 
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
 import { generateStockInsight } from './lib/insight.js';
-import { generateMarketBrief, computeRegime, MARKET_BASKET } from './lib/brief.js';
+import { generateMarketBrief, getMoversBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
 import { getEarningsCalendar } from './lib/earnings.js';
@@ -104,13 +104,11 @@ app.get('/api/news', wrap(async (req, res) => {
 // ── ReturnSignal-style: market movers (cross-sectional returns for tables + Plotly)
 app.get('/api/market/movers', wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
-  const symbols = req.query.symbols
-    ? String(req.query.symbols).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 30)
-    : MARKET_BASKET;
-  const items = (await getWatchlistData(symbols)).filter((i) => i.price > 0);
-  const regime = computeRegime(items);
-  items.sort((a, b) => b.changePercent - a.changePercent);
-  res.json({ items, regime });
+  if (req.query.symbols) {
+    const symbols = String(req.query.symbols).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 40);
+    return res.json(await getMoversBoard(symbols, false)); // custom set: uncached
+  }
+  res.json(await getMoversBoard()); // default basket: cached 20s, empties not cached
 }));
 
 // ── ReturnSignal-style: wire feed for the bottom ticker marquee ────────────────
