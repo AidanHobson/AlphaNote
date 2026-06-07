@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { getJSON } from '../lib/api';
-import type { MarketBrief, MoverItem, Regime, NewsArticle } from '../lib/models';
+import type { MarketBrief, MoverItem, Regime, NewsArticle, CommodityItem } from '../lib/models';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import MarketTable from '../components/MarketTable';
 import AIText from '../components/AIText';
 import Skeleton, { SkeletonLines } from '../components/Skeleton';
-import { formatPct, timeAgo } from '../lib/format';
+import { formatPct, formatPrice, changeDir, arrow, timeAgo } from '../lib/format';
 
 const Chart = lazy(() => import('../components/Chart'));
 
@@ -22,6 +22,7 @@ export default function DailyUpdate() {
   const [regime, setRegime] = useState<Regime | null>(null);
   const [brief, setBrief] = useState<{ loading: boolean; data?: MarketBrief; error?: string }>({ loading: true });
   const [news, setNews] = useState<NewsArticle[] | null>(null);
+  const [commodities, setCommodities] = useState<CommodityItem[] | null>(null);
   const [moversError, setMoversError] = useState('');
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function DailyUpdate() {
       .then((data) => setBrief({ loading: false, data }))
       .catch((e) => setBrief({ loading: false, error: e.message }));
     getJSON<{ articles: NewsArticle[] }>('/api/news').then((d) => setNews(d.articles)).catch(() => setNews([]));
+    getJSON<{ items: CommodityItem[] }>('/api/market/commodities').then((d) => setCommodities(d.items)).catch(() => setCommodities([]));
   }, []);
 
   const moversBar = (items: MoverItem[]) => {
@@ -101,6 +103,26 @@ export default function DailyUpdate() {
             {moversError ? <div className="error-banner">{moversError}</div>
               : !movers ? <SkeletonLines lines={6} />
               : <MarketTable items={movers.slice(0, 15)} showCap={false} />}
+          </Card>
+
+          {/* Commodities (ETF-proxy day moves) */}
+          <Card className="col-span-3" title="Commodities" sub={commodities ? `${commodities.length} via ETF proxies` : ''}>
+            {!commodities ? <Skeleton height={120} />
+              : commodities.length === 0 ? <div className="empty">Commodities unavailable right now.</div>
+              : (
+                <div className="commodity-grid">
+                  {commodities.map((c) => (
+                    <div key={c.symbol} className="commodity-tile">
+                      <div className="commodity-label">{c.label}</div>
+                      <div className="commodity-row">
+                        <span className="commodity-price">{formatPrice(c.price)}</span>
+                        <span className={`badge ${changeDir(c.changePercent)}`}>{arrow(c.changePercent)} {formatPct(c.changePercent)}</span>
+                      </div>
+                      <div className="commodity-sym">{c.symbol}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
           </Card>
         </div>
       )}

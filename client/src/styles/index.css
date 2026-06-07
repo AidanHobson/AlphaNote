@@ -171,6 +171,14 @@ button { font-family: inherit; }
 .mtable .sym-cell img { width: 22px; height: 22px; border-radius: 5px; background: var(--color-bg-elevated); object-fit: contain; }
 .mtable .sym-cell .nm { color: var(--color-text-secondary); font-size: 12px; }
 
+/* ── Commodity tiles ────────────────────────────────────────────────────── */
+.commodity-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.commodity-tile { border: 1px solid var(--color-border); border-radius: 10px; padding: 11px 13px; background: var(--color-bg-card); }
+.commodity-label { font-size: 12.5px; color: var(--color-text-secondary); font-weight: 600; }
+.commodity-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.commodity-price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.commodity-sym { margin-top: 4px; font-size: 11px; color: var(--color-text-muted); letter-spacing: .03em; }
+
 /* ── Tabs ───────────────────────────────────────────────────────────────── */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); margin-bottom: 18px; overflow-x: auto; }
 .tab { padding: 9px 14px; border: none; background: none; color: var(--color-text-secondary); font-weight: 600; font-size: 13.5px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }

@@ -2,7 +2,7 @@
 // card and OpenStock's Claude→Gemini AI. Summarises the day's news + movers into
 // a short, plain-English market brief.
 
-import { getWatchlistData, getNews } from './finnhub.js';
+import { getQuote, getWatchlistData, getNews } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { POPULAR_STOCK_SYMBOLS } from './constants.js';
 
@@ -10,15 +10,34 @@ import { POPULAR_STOCK_SYMBOLS } from './constants.js';
 export const MARKET_BASKET = [
   // Tech / comms
   'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'NFLX', 'AMD', 'CRM',
-  'ORCL', 'ADBE', 'AVGO', 'QCOM', 'PLTR',
+  'ORCL', 'ADBE', 'AVGO', 'QCOM', 'PLTR', 'INTC', 'CSCO', 'IBM',
   // Financials
-  'JPM', 'BAC', 'WFC', 'GS', 'V', 'MA',
+  'JPM', 'BAC', 'WFC', 'GS', 'V', 'MA', 'MS', 'AXP',
   // Healthcare
-  'UNH', 'JNJ', 'LLY', 'PFE', 'ABBV',
+  'UNH', 'JNJ', 'LLY', 'PFE', 'ABBV', 'MRK', 'TMO',
   // Consumer
-  'WMT', 'HD', 'COST', 'NKE', 'MCD', 'DIS',
+  'WMT', 'HD', 'COST', 'NKE', 'MCD', 'DIS', 'KO', 'PG',
   // Energy / industrials
-  'XOM', 'CVX', 'CAT', 'BA',
+  'XOM', 'CVX', 'CAT', 'BA', 'GE',
+];
+
+// Commodity exposure via liquid, US-listed ETF proxies the free Finnhub tier can
+// quote (futures themselves are premium). Shared with the Macro page's Commodities
+// group and the Daily Update commodities card.
+export const COMMODITIES = [
+  { symbol: 'GLD', label: 'Gold' },
+  { symbol: 'SLV', label: 'Silver' },
+  { symbol: 'PPLT', label: 'Platinum' },
+  { symbol: 'PALL', label: 'Palladium' },
+  { symbol: 'CPER', label: 'Copper' },
+  { symbol: 'USO', label: 'Crude Oil (WTI)' },
+  { symbol: 'BNO', label: 'Brent Crude' },
+  { symbol: 'UNG', label: 'Natural Gas' },
+  { symbol: 'UGA', label: 'Gasoline' },
+  { symbol: 'DBA', label: 'Agriculture' },
+  { symbol: 'CORN', label: 'Corn' },
+  { symbol: 'URA', label: 'Uranium' },
+  { symbol: 'DBC', label: 'Broad Basket' },
 ];
 
 // Deterministic market-regime read from cross-sectional breadth (no AI, no candles).
@@ -50,6 +69,32 @@ export async function getMoversBoard(symbols = MARKET_BASKET, useCache = true) {
   // Only cache a reasonably-complete board — a big shortfall usually means a
   // transient rate-limit, and we don't want to pin a partial result for 20s.
   if (useCache && items.length >= Math.ceil(symbols.length * 0.8)) moversCache = { t: Date.now(), data };
+  return data;
+}
+
+// Commodities board (ETF-proxy day moves). Quotes only — no profiles needed — so
+// it's light on the Finnhub budget. Cached 20s; partial results (transient
+// rate-limit) are not cached, mirroring the movers board.
+let commoditiesCache = { t: 0, data: null };
+export async function getCommoditiesBoard() {
+  if (commoditiesCache.data && Date.now() - commoditiesCache.t < 20_000) return commoditiesCache.data;
+  const out = new Array(COMMODITIES.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < COMMODITIES.length) {
+      const idx = i++;
+      const c = COMMODITIES[idx];
+      const q = await getQuote(c.symbol);
+      out[idx] = {
+        symbol: c.symbol, label: c.label,
+        price: q?.c || 0, change: q?.d || 0, changePercent: q?.dp || 0,
+      };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, COMMODITIES.length) }, worker));
+  const items = out.filter((x) => x.price > 0).sort((a, b) => b.changePercent - a.changePercent);
+  const data = { items };
+  if (items.length >= Math.ceil(COMMODITIES.length * 0.8)) commoditiesCache = { t: Date.now(), data };
   return data;
 }
 

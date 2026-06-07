@@ -8,7 +8,7 @@ import { cached } from './lib/apicache.js';
 
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
 import { generateStockInsight } from './lib/insight.js';
-import { generateMarketBrief, getMoversBoard } from './lib/brief.js';
+import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
 import { getEarningsCalendar } from './lib/earnings.js';
@@ -109,6 +109,12 @@ app.get('/api/market/movers', wrap(async (req, res) => {
     return res.json(await getMoversBoard(symbols, false)); // custom set: uncached
   }
   res.json(await getMoversBoard()); // default basket: cached 20s, empties not cached
+}));
+
+// ── Commodities board (ETF-proxy day moves; quotes only, cached 20s) ──────────
+app.get('/api/market/commodities', wrap(async (req, res) => {
+  if (!requireFinnhub(res)) return;
+  res.json(await getCommoditiesBoard());
 }));
 
 // ── ReturnSignal-style: wire feed for the bottom ticker marquee ────────────────

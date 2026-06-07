@@ -5,6 +5,8 @@ export interface MoverItem {
   symbol: string; name: string; price: number; change: number; changePercent: number;
   currency: string; logo: string; exchange: string; marketCap: number;
 }
+export interface CommodityItem { symbol: string; label: string; price: number; change: number; changePercent: number; }
+export interface CommoditiesBoard { items: CommodityItem[]; }
 export interface NewsArticle { id: number; headline: string; summary: string; source: string; url: string; datetime: number; }
 export interface Regime { label: string; breadth: number; avgChange: number; advancers: number; decliners: number; total: number; }
 export interface MarketBrief { generatedAt: string; regime: Regime; provider: string; fellBack: boolean; text: string; movers: MoverItem[]; }

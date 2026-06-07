@@ -16,3 +16,6 @@ npm-debug.log*
 
 # server-side disk cache
 .insider-cache.json
+
+# local editor / preview tooling
+.claude/

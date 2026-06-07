@@ -4,6 +4,7 @@
 
 import { getQuote } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
+import { COMMODITIES } from './brief.js';
 
 export const MACRO_GROUPS = [
   { name: 'Equity Indices', items: [
@@ -17,10 +18,8 @@ export const MACRO_GROUPS = [
   { name: 'FX', items: [
     { symbol: 'UUP', label: 'US Dollar' }, { symbol: 'FXE', label: 'Euro' }, { symbol: 'FXY', label: 'Japanese Yen' },
   ] },
-  { name: 'Commodities', items: [
-    { symbol: 'GLD', label: 'Gold' }, { symbol: 'SLV', label: 'Silver' },
-    { symbol: 'USO', label: 'Crude Oil' }, { symbol: 'UNG', label: 'Natural Gas' }, { symbol: 'DBC', label: 'Broad Commodities' },
-  ] },
+  // Commodities: shared with the Daily Update board (single source of truth).
+  { name: 'Commodities', items: COMMODITIES },
   { name: 'Crypto', items: [
     { symbol: 'BITO', label: 'Bitcoin (BITO)' }, { symbol: 'ETHE', label: 'Ethereum (ETHE)' },
   ] },
