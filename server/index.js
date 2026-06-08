@@ -14,7 +14,7 @@ import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
 import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
-import { getMarketValuation, getYields } from './lib/valuation.js';
+import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getInsiderTransactions } from './lib/insider.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -231,6 +231,15 @@ app.get('/api/valuation/market', wrap(async (req, res) => {
 
 app.get('/api/valuation/yields', wrap(async (req, res) => {
   res.json(await getYields());
+}));
+
+// Macro lenses (Growth / Quality / Leverage) — market-level FRED series per theme.
+app.get('/api/valuation/theme/:tab', wrap(async (req, res) => {
+  const tab = req.params.tab;
+  if (!VALUATION_THEMES.includes(tab)) {
+    return res.status(404).json({ error: `Unknown valuation lens "${tab}". Available: ${VALUATION_THEMES.join(', ')}.` });
+  }
+  res.json(await getValuationTheme(tab));
 }));
 
 // ── Insider Explorer (Form 4 open-market buys/sells, curated universe) ────────

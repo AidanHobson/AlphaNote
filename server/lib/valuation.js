@@ -50,13 +50,32 @@ async function multplSeries(slug, period = 'by-month') {
   });
 }
 
-async function fredSeries(id) {
-  return cached(`fred:${id}`, async () => {
+async function fredSeries(id, units = 'lin') {
+  return cached(`fred:${id}:${units}`, async () => {
     const key = process.env.FRED_API_KEY || '';
-    const html = await fetchText(`${FRED_BASE}/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc`);
+    const u = units && units !== 'lin' ? `&units=${units}` : ''; // e.g. pc1 = % change from year ago
+    const html = await fetchText(`${FRED_BASE}/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc${u}`);
     const data = JSON.parse(html);
     return (data.observations || []).filter((o) => o.value !== '.').map((o) => ({ date: o.date, value: Number(o.value) }));
   });
+}
+
+// Two-series helpers (date-aligned), for ratios/spreads built from FRED.
+async function fredRatio(idNum, idDen, { scale = 1, pct = false } = {}) {
+  const [num, den] = await Promise.all([fredSeries(idNum), fredSeries(idDen)]);
+  const denBy = new Map(den.map((o) => [o.date, o.value]));
+  return num
+    .map((o) => {
+      const d = denBy.get(o.date);
+      if (!d) return null;
+      return { date: o.date, value: Number(((o.value / (d * scale)) * (pct ? 100 : 1)).toFixed(2)) };
+    })
+    .filter(Boolean); // newest-first
+}
+async function fredDiff(idA, idB) {
+  const [a, b] = await Promise.all([fredSeries(idA), fredSeries(idB)]);
+  const bBy = new Map(b.map((o) => [o.date, o.value]));
+  return a.map((o) => (bBy.has(o.date) ? { date: o.date, value: Number((o.value - bBy.get(o.date)).toFixed(2)) } : null)).filter(Boolean);
 }
 
 // Buffett Indicator: nonfinancial corporate equities ($M) / GDP ($B) → %.
@@ -185,5 +204,74 @@ export async function getYields() {
 
   const data = { tab: 'Yields', colorMode: 'neutral', generatedAt: new Date().toISOString(), metrics };
   if (metrics.some((x) => x.available)) yieldsCache = { t: Date.now(), data };
+  return data;
+}
+
+// ── Macro lenses: Growth / Quality / Leverage (market-level, free FRED data) ──
+// These aren't per-company cross-sections (that needs premium fundamentals) — they
+// are the macro-financial backdrop for each theme, each shown vs its own history
+// and rendered neutrally (level-based percentile, no rich/cheap colouring).
+const THEME_METRICS = {
+  Growth: [
+    { key: 'gdp', label: 'Real GDP Growth', unit: '%', source: () => fredSeries('A191RL1Q225SBEA'),
+      description: 'Real GDP, quarterly annualised % change (BEA via FRED).' },
+    { key: 'indpro', label: 'Industrial Production (YoY)', unit: '%', source: () => fredSeries('INDPRO', 'pc1'),
+      description: 'Industrial production index, % change from a year ago (FRED).' },
+    { key: 'pce', label: 'Consumer Spending (YoY)', unit: '%', source: () => fredSeries('PCEC96', 'pc1'),
+      description: 'Real personal consumption expenditures, % change from a year ago (FRED).' },
+    { key: 'retail', label: 'Retail Sales (YoY)', unit: '%', source: () => fredSeries('RSAFS', 'pc1'),
+      description: 'Advance retail & food-services sales, % change from a year ago (FRED).' },
+    { key: 'payrolls', label: 'Nonfarm Payrolls (YoY)', unit: '%', source: () => fredSeries('PAYEMS', 'pc1'),
+      description: 'Total nonfarm payroll employment, % change from a year ago (FRED).' },
+  ],
+  Quality: [
+    { key: 'profitshare', label: 'Corporate Profit Share', unit: '%', source: () => fredRatio('CP', 'GDP', { pct: true }),
+      description: 'After-tax corporate profits as a share of GDP (BEA via FRED). Higher = fatter aggregate margins.' },
+    { key: 'qspread', label: 'Baa–Aaa Quality Spread', unit: 'pp', source: () => fredDiff('BAA', 'AAA'),
+      description: "Moody's Baa minus Aaa corporate yields (FRED). Wider = a bigger penalty on lower-quality credit." },
+    { key: 'lending', label: 'Bank Lending Standards', unit: '%', source: () => fredSeries('DRTSCILM'),
+      description: 'Net % of banks tightening C&I lending standards, Fed SLOOS (FRED). Higher = tighter credit.' },
+    { key: 'recession', label: 'Recession Probability', unit: '%', source: () => fredSeries('RECPROUSM156N'),
+      description: 'Smoothed US recession probability, Chauvet–Piger model (FRED).' },
+  ],
+  Leverage: [
+    { key: 'hyoas', label: 'High-Yield Spread', unit: '%', source: () => fredSeries('BAMLH0A0HYM2'),
+      description: 'ICE BofA US High-Yield option-adjusted spread (FRED). Wider = more credit stress.' },
+    { key: 'baa', label: 'Baa Corporate Spread', unit: 'pp', source: () => fredSeries('BAA10Y'),
+      description: "Moody's Baa corporate yield minus the 10-year Treasury (FRED)." },
+    { key: 'dsr', label: 'Household Debt Service', unit: '%', source: () => fredSeries('TDSP'),
+      description: 'Household debt-service payments as a share of disposable personal income (FRED).' },
+    { key: 'corpdebt', label: 'Nonfin Corp Debt / GDP', unit: '%', source: () => fredRatio('NCBDBIQ027S', 'GDP', { scale: 1000, pct: true }),
+      description: 'Nonfinancial corporate debt securities & loans as a share of GDP (Fed Z.1 / FRED).' },
+    { key: 'delinq', label: 'Business Loan Delinquency', unit: '%', source: () => fredSeries('DRBLACBS'),
+      description: 'Delinquency rate on business loans, all commercial banks (FRED).' },
+  ],
+};
+
+export const VALUATION_THEMES = Object.keys(THEME_METRICS);
+
+const themeCache = new Map();
+export async function getValuationTheme(tabRaw) {
+  const tab = String(tabRaw || '');
+  const specs = THEME_METRICS[tab];
+  if (!specs) return { tab, available: false, colorMode: 'neutral', generatedAt: new Date().toISOString(), metrics: [] };
+
+  const hit = themeCache.get(tab);
+  if (hit && Date.now() - hit.t < 6 * 3600_000) return hit.data;
+
+  const metrics = await Promise.all(
+    specs.map(async (m) => {
+      try {
+        const series = await m.source();
+        if (!series || series.length < 8) throw new Error('insufficient history');
+        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: true, ...summarize(series, { richWhen: 'high' }) };
+      } catch (e) {
+        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message };
+      }
+    })
+  );
+
+  const data = { tab, colorMode: 'neutral', generatedAt: new Date().toISOString(), metrics };
+  if (metrics.some((x) => x.available)) themeCache.set(tab, { t: Date.now(), data });
   return data;
 }

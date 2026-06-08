@@ -8,7 +8,13 @@ import Skeleton, { SkeletonLines } from '../components/Skeleton';
 const Chart = lazy(() => import('../components/Chart'));
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
 
-const TABS = ['Market', 'Valuation', 'Yields', 'Quality', 'Leverage', 'Growth', 'Size'];
+const TABS = ['Market', 'Yields', 'Growth', 'Quality', 'Leverage', 'Size'];
+const THEME_TABS = ['Growth', 'Quality', 'Leverage'];
+const THEME_INTRO: Record<string, string> = {
+  Growth: 'The growth backdrop — real GDP, industrial production, consumer spending, retail sales and payrolls — each shown against its own history.',
+  Quality: 'Aggregate corporate quality & credit conditions — profit share of GDP, the Baa–Aaa quality spread, bank lending standards and recession odds.',
+  Leverage: 'System leverage & credit stress — high-yield and Baa spreads, household debt service, nonfinancial corporate debt/GDP and loan delinquencies.',
+};
 
 const richColor = (p: number) => (p >= 60 ? 'var(--color-down)' : p <= 40 ? 'var(--color-up)' : 'var(--color-warn)');
 const valueColor = (p: number) => (p >= 60 ? 'var(--color-down)' : p <= 40 ? 'var(--color-up)' : 'var(--color-text-primary)');
@@ -32,6 +38,8 @@ export default function Valuation() {
   const [error, setError] = useState('');
   const [yields, setYields] = useState<MarketValuation | null>(null);
   const [yieldsErr, setYieldsErr] = useState('');
+  const [themes, setThemes] = useState<Record<string, MarketValuation>>({});
+  const [themeErr, setThemeErr] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<{ m: ValMetric; neutral: boolean } | null>(null);
 
   useEffect(() => {
@@ -42,7 +50,12 @@ export default function Valuation() {
     if (tab === 'Yields' && !yields && !yieldsErr) {
       getJSON<MarketValuation>('/api/valuation/yields').then(setYields).catch((e) => setYieldsErr(e.message));
     }
-  }, [tab, yields, yieldsErr]);
+    if (THEME_TABS.includes(tab) && !themes[tab] && !themeErr[tab]) {
+      getJSON<MarketValuation>(`/api/valuation/theme/${tab}`)
+        .then((d) => setThemes((s) => ({ ...s, [tab]: d })))
+        .catch((e) => setThemeErr((s) => ({ ...s, [tab]: e.message })));
+    }
+  }, [tab, yields, yieldsErr, themes, themeErr]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
@@ -54,7 +67,7 @@ export default function Valuation() {
     <div>
       <div className="page-head">
         <h1>Valuation Explorer</h1>
-        <p>Fundamental metrics grouped by region, country, sector, or industry. Current values are colored relative to their own history.</p>
+        <p>Market valuation, rates, and the macro backdrop for growth, quality and leverage — each metric shown against its own history.</p>
       </div>
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
@@ -89,13 +102,26 @@ export default function Valuation() {
             </div>
           )}
         </div>
+      ) : THEME_TABS.includes(tab) ? (
+        <div>
+          <p style={{ color: 'var(--color-text-secondary)', maxWidth: 760, marginTop: 0 }}>
+            {THEME_INTRO[tab]} Click any tile for the full history.
+          </p>
+          {themeErr[tab] && <div className="error-banner">{themeErr[tab]}</div>}
+          {!themes[tab] && !themeErr[tab] && <div className="grid grid-3">{Array.from({ length: 5 }).map((_, i) => <Card key={i}><SkeletonLines lines={4} /></Card>)}</div>}
+          {themes[tab] && (
+            <div className="grid grid-3">
+              {themes[tab].metrics.map((m) => <ValTile key={m.key} m={m} neutral onOpen={() => m.available && setOpen({ m, neutral: true })} />)}
+            </div>
+          )}
+        </div>
       ) : (
-        <Card title={`${tab} — by sector / country`}>
+        <Card title="Size — small vs large cap">
           <div className="empty" style={{ border: 'none' }}>
-            <strong>Cross-sectional fundamentals aren’t in this free build</strong>
-            The “{tab}” lens groups per-company fundamentals (P/B, P/S, ROE, margins, debt, growth, market cap) by sector, country,
-            and industry — which needs a premium fundamentals dataset. The <b>Market</b> and <b>Yields</b> tabs are fully live on free public data
-            (Shiller via multpl.com + FRED).
+            <strong>The size lens needs an index-history feed the free tier lacks</strong>
+            A small-vs-large read needs small-cap index history (Russell 2000 / Wilshire small-cap), which FRED has discontinued and
+            Finnhub gates behind its premium candle API. The <b>Market</b>, <b>Yields</b>, <b>Growth</b>, <b>Quality</b> and <b>Leverage</b> tabs
+            are all live on free public data (Shiller via multpl.com + FRED).
           </div>
         </Card>
       )}
@@ -147,7 +173,7 @@ function ValModal({ m, onClose, neutral = false }: { m: ValMetric; onClose: () =
   const lineVar = neutral ? '--color-accent' : m.richPercentile >= 60 ? '--color-down' : m.richPercentile <= 40 ? '--color-up' : '--color-accent';
   return (
     <div className="vmodal-overlay" onClick={onClose}>
-      <div className="vmodal" onClick={(e) => e.stopPropagation()}>
+      <div className="vmodal" role="dialog" aria-modal="true" aria-label={`${m.label} — full history`} onClick={(e) => e.stopPropagation()}>
         <div className="vmodal-head">
           <div>
             <h2 style={{ margin: 0, fontSize: 20 }}>{m.label}</h2>
@@ -155,7 +181,7 @@ function ValModal({ m, onClose, neutral = false }: { m: ValMetric; onClose: () =
               Full history · current <b style={{ color: neutral ? 'var(--color-text-primary)' : valueColor(m.richPercentile) }}>{fmtVal(m.value, m.unit)}</b> ({m.valuePercentile}th percentile, as of {m.asOf})
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose} title="Close">✕</button>
+          <button className="icon-btn" onClick={onClose} title="Close" aria-label="Close dialog">✕</button>
         </div>
         <Suspense fallback={<Skeleton height={380} />}>
           <Chart
