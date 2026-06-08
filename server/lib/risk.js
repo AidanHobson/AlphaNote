@@ -4,7 +4,7 @@
 // engine's fredSeries + summarize. A composite stress score per category and an
 // overall read drive the dashboard; an AI "Risk Read" narrates the picture.
 
-import { fredSeries, summarize } from './valuation.js';
+import { fredSeries, multplSeries, summarize } from './valuation.js';
 import { callAIWithFallback } from './ai-provider.js';
 
 // Annualised rolling realised volatility (%), newest-first, from a price level
@@ -24,6 +24,43 @@ export function realizedVolSeries(series, { window = 21, ppy = 252 } = {}) {
     out.push({ date: rets[i - 1].date, value: Number((Math.sqrt(variance * ppy) * 100).toFixed(2)) });
   }
   return out.reverse(); // newest-first
+}
+
+// Drawdown (%, negative) from the trailing-`window` high, newest-first.
+export function drawdownSeries(series, window = 252) {
+  const chrono = [...series].reverse();
+  const out = [];
+  for (let i = 0; i < chrono.length; i++) {
+    let peak = -Infinity;
+    for (let j = Math.max(0, i - window + 1); j <= i; j++) if (chrono[j].value > peak) peak = chrono[j].value;
+    const dd = peak > 0 ? ((chrono[i].value - peak) / peak) * 100 : 0;
+    out.push({ date: chrono[i].date, value: Number(dd.toFixed(2)) });
+  }
+  return out.reverse();
+}
+
+// Percent above/below the `window`-period moving average, newest-first.
+export function smaDistanceSeries(series, window = 200) {
+  const chrono = [...series].reverse();
+  const out = [];
+  let sum = 0;
+  for (let i = 0; i < chrono.length; i++) {
+    sum += chrono[i].value;
+    if (i >= window) sum -= chrono[i - window].value;
+    if (i >= window - 1) {
+      const sma = sum / window;
+      if (sma > 0) out.push({ date: chrono[i].date, value: Number(((chrono[i].value / sma - 1) * 100).toFixed(2)) });
+    }
+  }
+  return out.reverse();
+}
+
+// Equity risk premium: S&P 500 earnings yield (multpl) − 10Y Treasury (FRED),
+// date-aligned by month, newest-first.
+async function equityRiskPremiumSeries() {
+  const [ey, gs10] = await Promise.all([multplSeries('s-p-500-earnings-yield'), fredSeries('GS10')]);
+  const gsBy = new Map(gs10.map((o) => [o.date, o.value]));
+  return ey.map((o) => (gsBy.has(o.date) ? { date: o.date, value: Number((o.value - gsBy.get(o.date)).toFixed(2)) } : null)).filter(Boolean);
 }
 
 // changeBack: observations back to measure the "recent change" (≈1 month):
@@ -52,6 +89,16 @@ const RISK_GROUPS = [
       description: 'St. Louis Fed Financial Stress Index (FRED). Positive = above-average stress in the financial system.' },
     { key: 'vix', label: 'VIX (Equity Vol)', unit: 'idx', riskWhen: 'high', changeBack: 21, changeLabel: '1mo', source: () => fredSeries('VIXCLS'),
       description: "CBOE Volatility Index (FRED). The market's 30-day implied volatility / fear gauge." },
+  ] },
+  { key: 'equity', name: 'Equity / Market Risk', blurb: 'Drawdown, realised volatility, trend and the valuation cushion in US equities.', metrics: [
+    { key: 'spdd', label: 'S&P 500 Drawdown', unit: '%', riskWhen: 'low', changeBack: 21, changeLabel: '1mo', source: async () => drawdownSeries(await fredSeries('SP500')),
+      description: 'S&P 500 percent below its trailing 1-year high (computed from FRED SP500). A deeper drawdown = higher realised risk.' },
+    { key: 'spvol', label: 'S&P 500 Realized Vol', unit: '%', riskWhen: 'high', changeBack: 21, changeLabel: '1mo', source: async () => realizedVolSeries(await fredSeries('SP500')),
+      description: 'Annualised 1-month realised volatility of the S&P 500 (computed from FRED SP500).' },
+    { key: 'sptrend', label: 'S&P 500 vs 200-Day Avg', unit: '%', riskWhen: 'low', changeBack: 21, changeLabel: '1mo', source: async () => smaDistanceSeries(await fredSeries('SP500')),
+      description: 'S&P 500 percent above/below its 200-day moving average (computed). Trading below trend = elevated risk.' },
+    { key: 'erp', label: 'Equity Risk Premium', unit: 'pp', riskWhen: 'low', changeBack: 1, changeLabel: 'MoM', source: equityRiskPremiumSeries,
+      description: 'S&P 500 earnings yield minus the 10-year Treasury (Shiller via multpl + FRED). A compressed premium = richer, riskier equities.' },
   ] },
   { key: 'fx', name: 'Foreign-Exchange Risk', blurb: 'Dollar strength, currency volatility, and carry / EM-currency stress.', metrics: [
     { key: 'broaddxy', label: 'Broad US Dollar Index', unit: 'idx', riskWhen: 'high', changeBack: 21, changeLabel: '1mo', source: () => fredSeries('DTWEXBGS'),

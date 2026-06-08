@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getJSON } from '../lib/api';
-import type { MarketBrief, MoverItem, Regime, NewsArticle, CommodityItem } from '../lib/models';
+import type { MarketBrief, MoverItem, Regime, NewsArticle, CommodityItem, RiskBoard } from '../lib/models';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import MarketTable from '../components/MarketTable';
@@ -15,6 +16,7 @@ function cssVar(name: string) {
 }
 const regimeColor = (label: string) =>
   label === 'Risk-on' ? cssVar('--color-up') : label === 'Risk-off' ? cssVar('--color-down') : cssVar('--color-warn');
+const stressColor = (p: number) => (p >= 60 ? 'var(--color-down)' : p <= 35 ? 'var(--color-up)' : 'var(--color-warn)');
 
 export default function DailyUpdate() {
   const [tab, setTab] = useState('Live');
@@ -23,6 +25,7 @@ export default function DailyUpdate() {
   const [brief, setBrief] = useState<{ loading: boolean; data?: MarketBrief; error?: string }>({ loading: true });
   const [news, setNews] = useState<NewsArticle[] | null>(null);
   const [commodities, setCommodities] = useState<CommodityItem[] | null>(null);
+  const [risk, setRisk] = useState<RiskBoard | null>(null);
   const [moversError, setMoversError] = useState('');
 
   useEffect(() => {
@@ -34,6 +37,7 @@ export default function DailyUpdate() {
       .catch((e) => setBrief({ loading: false, error: e.message }));
     getJSON<{ articles: NewsArticle[] }>('/api/news').then((d) => setNews(d.articles)).catch(() => setNews([]));
     getJSON<{ items: CommodityItem[] }>('/api/market/commodities').then((d) => setCommodities(d.items)).catch(() => setCommodities([]));
+    getJSON<RiskBoard>('/api/risk').then(setRisk).catch(() => setRisk(null));
   }, []);
 
   const moversBar = (items: MoverItem[]) => {
@@ -72,6 +76,12 @@ export default function DailyUpdate() {
                   {regime.advancers} up · {regime.decliners} down of {regime.total}<br />
                   Breadth {(regime.breadth * 100).toFixed(0)}% · avg {formatPct(regime.avgChange)}
                 </div>
+                {risk && (
+                  <Link to="/risk" className="risk-posture" title="Open the Risk Monitor">
+                    <span style={{ color: 'var(--color-text-muted)' }}>Risk Monitor</span>
+                    <span><b style={{ color: stressColor(risk.overall) }}>{risk.label}</b> <span style={{ color: 'var(--color-text-muted)' }}>{risk.overall}/100 →</span></span>
+                  </Link>
+                )}
               </div>
             )}
           </Card>

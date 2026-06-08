@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { stressLabel, realizedVolSeries } from '../server/lib/risk.js';
+import { stressLabel, realizedVolSeries, drawdownSeries, smaDistanceSeries } from '../server/lib/risk.js';
 import { summarize } from '../server/lib/valuation.js';
+
+// build a newest-first series (as fredSeries returns) with valid padded dates
+const nf = (values) => values.map((value, i) => ({ date: `2020-03-${String(i + 1).padStart(2, '0')}`, value })).reverse();
 
 describe('stressLabel', () => {
   it('buckets a 0–100 composite stress score', () => {
@@ -33,6 +36,21 @@ describe('realizedVolSeries', () => {
     const vol = realizedVolSeries(newestFirst(Array.from({ length: 28 }, (_, i) => 100 + (i % 2 ? 2 : 0))), { window: 21 });
     expect(vol[0].value).toBeGreaterThan(0);
     expect(vol[0].date > vol[vol.length - 1].date).toBe(true); // newest-first
+  });
+});
+
+describe('drawdownSeries', () => {
+  it('is 0 at new highs and negative below the trailing peak (newest-first)', () => {
+    const dd = drawdownSeries(nf([100, 110, 120, 90]), 252);
+    expect(dd[0].value).toBeCloseTo(-25, 5); // latest 90 vs peak 120 → -25%
+    expect(dd[dd.length - 1].value).toBe(0);  // first point is its own peak
+  });
+});
+
+describe('smaDistanceSeries', () => {
+  it('measures percent above/below the moving average (newest-first)', () => {
+    const d = smaDistanceSeries(nf([100, 100, 100, 130]), 3);
+    expect(d[0].value).toBeCloseTo(18.18, 1); // 130 vs sma(100,100,130)=110
   });
 });
 

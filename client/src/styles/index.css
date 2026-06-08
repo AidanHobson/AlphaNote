@@ -268,6 +268,8 @@ button { font-family: inherit; }
 .risk-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .risk-gauge { display: flex; align-items: center; gap: 12px; }
 .stress-chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; border: 1px solid; }
+.risk-posture { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); font-size: 13px; }
+.risk-posture:hover { color: var(--color-accent); }
 .vmodal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.62); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 120; padding: 24px; }
 .vmodal { width: min(900px, 96vw); max-height: 86vh; overflow: auto; background: var(--color-bg-card); border: 1px solid var(--color-border-strong); border-radius: 16px; box-shadow: var(--shadow); padding: 22px; }
 .vmodal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 6px; }

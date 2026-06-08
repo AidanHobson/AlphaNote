@@ -29,7 +29,7 @@ async function cached(key, fn) {
 }
 
 // Parse a multpl.com "/table/{period}" page → newest-first [{date:'YYYY-MM-01', value}].
-async function multplSeries(slug, period = 'by-month') {
+export async function multplSeries(slug, period = 'by-month') {
   return cached(`multpl:${slug}:${period}`, async () => {
     const html = await fetchText(`https://www.multpl.com/${slug}/table/${period}`);
     // Strip HTML entities first — multpl pads values with `&#x2002;` (en-space),
