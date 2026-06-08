@@ -17,11 +17,16 @@ export const MACRO_GROUPS = [
   ] },
   { name: 'FX', items: [
     { symbol: 'UUP', label: 'US Dollar' }, { symbol: 'FXE', label: 'Euro' }, { symbol: 'FXY', label: 'Japanese Yen' },
+    { symbol: 'FXB', label: 'British Pound' }, { symbol: 'FXF', label: 'Swiss Franc' },
+    { symbol: 'FXC', label: 'Canadian Dollar' }, { symbol: 'FXA', label: 'Australian Dollar' },
+    { symbol: 'CEW', label: 'EM Currencies' },
   ] },
   // Commodities: shared with the Daily Update board (single source of truth).
   { name: 'Commodities', items: COMMODITIES },
   { name: 'Crypto', items: [
-    { symbol: 'BITO', label: 'Bitcoin (BITO)' }, { symbol: 'ETHE', label: 'Ethereum (ETHE)' },
+    { symbol: 'IBIT', label: 'Bitcoin (spot)' }, { symbol: 'ETHA', label: 'Ethereum (spot)' },
+    { symbol: 'BITO', label: 'Bitcoin (futures)' }, { symbol: 'ETHE', label: 'Ethereum (trust)' },
+    { symbol: 'BITX', label: 'Bitcoin (2x)' },
   ] },
 ];
 
