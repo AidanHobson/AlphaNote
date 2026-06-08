@@ -43,9 +43,6 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
       ))}
 
       <div className="spacer" />
-      <div className="foot">
-        Hybrid of ReturnSignal × OpenStock. Data via Finnhub · charts via TradingView · AI via Claude→Gemini. Not financial advice.
-      </div>
     </aside>
   );
 }
