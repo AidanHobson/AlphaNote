@@ -63,6 +63,24 @@ button { font-family: inherit; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 6px; }
 
+/* ── Accessibility ──────────────────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+.card[role="button"] { cursor: pointer; }
+.mtable tbody tr[role="button"]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.skip-link {
+  position: absolute; left: 12px; top: -48px; z-index: 100;
+  background: var(--color-accent); color: #fff; padding: 9px 14px; border-radius: 8px;
+  font-weight: 600; font-size: 13px; transition: top .15s ease;
+}
+.skip-link:focus { top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+  .ticker .track { animation: none !important; }
+}
+
 /* ── App shell: sidebar + main ──────────────────────────────────────────── */
 .app-shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
 .sidebar {

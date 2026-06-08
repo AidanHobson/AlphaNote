@@ -14,7 +14,12 @@ export default function ThemeToggle() {
     localStorage.setItem(KEY, theme);
   }, [theme]);
   return (
-    <button className="icon-btn" title="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+    <button
+      className="icon-btn"
+      title="Toggle theme"
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+    >
       {theme === 'dark' ? '☀' : '☾'}
     </button>
   );

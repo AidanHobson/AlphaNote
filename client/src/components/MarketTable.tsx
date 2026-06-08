@@ -17,8 +17,16 @@ export default function MarketTable({ items, showCap = true }: { items: MoverIte
       <tbody>
         {items.map((it) => {
           const dir = changeDir(it.changePercent);
+          const go = () => nav(`/explorer?symbol=${encodeURIComponent(it.symbol)}`);
           return (
-            <tr key={it.symbol} onClick={() => nav(`/explorer?symbol=${encodeURIComponent(it.symbol)}`)}>
+            <tr
+              key={it.symbol}
+              onClick={go}
+              role="button"
+              tabIndex={0}
+              aria-label={`${it.symbol} ${it.name} — open in Explorer`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }}
+            >
               <td>
                 <div className="sym-cell">
                   {it.logo ? <img src={it.logo} alt="" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} /> : <div style={{ width: 22, height: 22 }} />}

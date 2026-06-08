@@ -5,6 +5,7 @@
 // a shared finalize() best-effort enriches market cap/sector via Finnhub.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCompanyProfile } from './finnhub.js';
@@ -299,9 +300,16 @@ async function finalize(txns, source) {
 // (e.g. after a restart) serve the last result instantly instead of doing the
 // multi-second cold scan again.
 let cache = { t: 0, ttl: 0, data: null };
-// Project-relative (not os.tmpdir) so every server process — however launched —
-// shares the same cache file.
-const DISK_CACHE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.insider-cache.json');
+// In dev, keep it project-relative so every locally-launched process shares one
+// file. On serverless (Vercel/Lambda) the project dir is READ-ONLY, so fall back
+// to the platform's writable temp dir — otherwise writes silently no-op and every
+// cold start redoes the multi-second scan.
+const IS_SERVERLESS = Boolean(
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT,
+);
+const DISK_CACHE = IS_SERVERLESS
+  ? path.join(os.tmpdir(), 'alphanote-insider-cache.json')
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.insider-cache.json');
 
 function readDiskCache() {
   try {
