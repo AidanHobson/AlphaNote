@@ -4,7 +4,7 @@
 // engine's fredSeries + summarize. A composite stress score per category and an
 // overall read drive the dashboard; an AI "Risk Read" narrates the picture.
 
-import { fredSeries, multplSeries, summarize } from './valuation.js';
+import { fredSeries, multplSeries, summarize, percentileOf, downsample } from './valuation.js';
 import { callAIWithFallback } from './ai-provider.js';
 
 // Annualised rolling realised volatility (%), newest-first, from a price level
@@ -122,36 +122,96 @@ export function stressLabel(score) {
   return 'Calm';
 }
 
+// ── Composite stress history ─────────────────────────────────────────────────
+// Reconstructed (not stored): at each past month we score every gauge's value
+// as-of that month at its percentile vs its FULL history — the same basis as the
+// live tile — then average. So the latest point equals the current score.
+const GRID_MONTHS = 120; // last ~10 years, common across categories
+
+export function monthGrid(months = GRID_MONTHS, now = new Date()) {
+  const grid = [];
+  for (let k = months - 1; k >= 0; k--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k + 1, 0)); // month-end
+    grid.push(d.toISOString().slice(0, 10));
+  }
+  return grid;
+}
+
+// Latest value with date <= cutoff (chrono = oldest-first), via binary search.
+export function asOfValue(chrono, cutoff) {
+  let lo = 0, hi = chrono.length - 1, ans = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (chrono[mid].date <= cutoff) { ans = chrono[mid].value; lo = mid + 1; } else hi = mid - 1;
+  }
+  return ans;
+}
+
+// Per-month composite stress (0–100, or null if no gauge has data that month).
+export function compositeMonthly(gauges, grid) {
+  const prepared = gauges
+    .filter((g) => g.series && g.series.length >= 12)
+    .map((g) => {
+      const chrono = [...g.series].reverse(); // oldest-first
+      return { chrono, sortedAsc: chrono.map((p) => p.value).slice().sort((a, b) => a - b), riskWhen: g.riskWhen };
+    });
+  return grid.map((cutoff) => {
+    let sum = 0, n = 0;
+    for (const g of prepared) {
+      const v = asOfValue(g.chrono, cutoff);
+      if (v == null) continue;
+      const pct = percentileOf(g.sortedAsc, v);
+      sum += g.riskWhen === 'high' ? pct : 100 - pct;
+      n++;
+    }
+    return n ? Math.round(sum / n) : null;
+  });
+}
+
 let cache = { t: 0, data: null };
 export async function getRiskBoard() {
   if (cache.data && Date.now() - cache.t < 30 * 60_000) return cache.data;
 
+  const grid = monthGrid();
+  const groupMonthly = []; // index-aligned to grid, for the overall trend
+
   const groups = await Promise.all(
     RISK_GROUPS.map(async (g) => {
-      const metrics = await Promise.all(
+      const enriched = await Promise.all(
         g.metrics.map(async (m) => {
           try {
             const series = await m.source();
             if (!series || series.length < 12) throw new Error('insufficient history');
-            return {
+            const metric = {
               key: m.key, label: m.label, unit: m.unit, description: m.description,
               riskWhen: m.riskWhen, changeLabel: m.changeLabel, available: true,
               ...summarize(series, { richWhen: m.riskWhen, changeBack: m.changeBack }),
             };
+            return { metric, series, riskWhen: m.riskWhen };
           } catch (e) {
-            return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message };
+            return { metric: { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message }, series: null };
           }
         })
       );
+      const metrics = enriched.map((e) => e.metric);
       const live = metrics.filter((x) => x.available);
       const stress = live.length ? Math.round(live.reduce((s, x) => s + x.richPercentile, 0) / live.length) : 0;
-      return { key: g.key, name: g.name, blurb: g.blurb, stress, label: stressLabel(stress), metrics };
+      const monthly = compositeMonthly(enriched.filter((e) => e.series), grid);
+      groupMonthly.push(monthly);
+      return { key: g.key, name: g.name, blurb: g.blurb, stress, label: stressLabel(stress), history: downsample(monthly.filter((v) => v != null), 60), metrics };
     })
   );
 
   const liveGroups = groups.filter((g) => g.metrics.some((m) => m.available));
   const overall = liveGroups.length ? Math.round(liveGroups.reduce((s, g) => s + g.stress, 0) / liveGroups.length) : 0;
-  const data = { generatedAt: new Date().toISOString(), overall, label: stressLabel(overall), groups };
+  // Overall trend = per-month mean across the categories that have data.
+  const overallMonthly = grid.map((_, i) => {
+    const vals = groupMonthly.map((m) => m[i]).filter((v) => v != null);
+    return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+  });
+  const history = downsample(overallMonthly.filter((v) => v != null), 60);
+
+  const data = { generatedAt: new Date().toISOString(), overall, label: stressLabel(overall), history, groups };
   if (liveGroups.length) cache = { t: Date.now(), data };
   return data;
 }

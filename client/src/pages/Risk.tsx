@@ -61,6 +61,12 @@ export default function Risk() {
                 Composite stress <b style={{ color: 'var(--color-text-primary)' }}>{board.overall}</b> / 100
               </div>
               <div className="pct-track" style={{ marginTop: 8 }}><div className="pct-fill" style={{ width: `${Math.max(board.overall, 1)}%`, background: stressColor(board.overall) }} /></div>
+              {board.history?.length > 1 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 2 }}>~10-year stress trend</div>
+                  <Spark values={board.history} color={stressColor(board.overall)} />
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -89,6 +95,9 @@ export default function Risk() {
               <div style={{ color: 'var(--color-text-muted)', fontSize: 12.5, marginTop: 2 }}>{g.blurb}</div>
             </div>
             <div className="risk-gauge">
+              {g.history?.length > 1 && (
+                <div title="~10-year stress trend" style={{ opacity: 0.9 }}><Spark values={g.history} color={stressColor(g.stress)} /></div>
+              )}
               <span className="stress-chip" style={{ color: stressColor(g.stress), borderColor: stressColor(g.stress) }}>{g.label}</span>
               <div style={{ minWidth: 120 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-muted)' }}>

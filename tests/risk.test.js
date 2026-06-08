@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stressLabel, realizedVolSeries, drawdownSeries, smaDistanceSeries } from '../server/lib/risk.js';
+import { stressLabel, realizedVolSeries, drawdownSeries, smaDistanceSeries, asOfValue, compositeMonthly, monthGrid } from '../server/lib/risk.js';
 import { summarize } from '../server/lib/valuation.js';
 
 // build a newest-first series (as fredSeries returns) with valid padded dates
@@ -51,6 +51,38 @@ describe('smaDistanceSeries', () => {
   it('measures percent above/below the moving average (newest-first)', () => {
     const d = smaDistanceSeries(nf([100, 100, 100, 130]), 3);
     expect(d[0].value).toBeCloseTo(18.18, 1); // 130 vs sma(100,100,130)=110
+  });
+});
+
+describe('asOfValue', () => {
+  const chrono = [{ date: '2020-01-31', value: 10 }, { date: '2020-02-29', value: 20 }, { date: '2020-03-31', value: 30 }];
+  it('returns the latest observation on or before the cutoff', () => {
+    expect(asOfValue(chrono, '2020-02-15')).toBe(10);
+    expect(asOfValue(chrono, '2020-02-29')).toBe(20);
+    expect(asOfValue(chrono, '2020-12-31')).toBe(30);
+  });
+  it('returns null before the series starts', () => {
+    expect(asOfValue(chrono, '2019-12-31')).toBeNull();
+  });
+});
+
+describe('monthGrid', () => {
+  it('returns N month-end dates, oldest first', () => {
+    const g = monthGrid(12, new Date(Date.UTC(2024, 5, 15)));
+    expect(g).toHaveLength(12);
+    expect(g[11]).toBe('2024-06-30'); // current month-end
+    expect(g[0] < g[11]).toBe(true);
+  });
+});
+
+describe('compositeMonthly', () => {
+  it('averages gauge risk-percentiles into 0–100, null before data', () => {
+    const series = nf(Array.from({ length: 14 }, (_, i) => i + 1)); // values 1..14, dates 2020-03-01..14
+    const grid = ['2020-03-07', '2020-03-14', '2020-04-30', '2019-01-01'];
+    const out = compositeMonthly([{ series, riskWhen: 'high' }], grid);
+    expect(out[3]).toBeNull();                    // before the series
+    expect(out[1]).toBeGreaterThan(out[0]);       // later/higher value → more risk (riskWhen high)
+    out.filter((v) => v != null).forEach((v) => { expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThanOrEqual(100); });
   });
 });
 
