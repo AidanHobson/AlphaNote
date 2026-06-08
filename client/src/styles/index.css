@@ -263,6 +263,11 @@ button { font-family: inherit; }
 .vtile .vval { font-size: 34px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .pct-track { height: 8px; border-radius: 5px; background: var(--color-bg-elevated); overflow: hidden; margin-top: 8px; }
 .pct-fill { height: 100%; border-radius: 5px; transition: width .3s ease; }
+
+/* ── Risk Monitor ───────────────────────────────────────────────────────── */
+.risk-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.risk-gauge { display: flex; align-items: center; gap: 12px; }
+.stress-chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; border: 1px solid; }
 .vmodal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.62); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 120; padding: 24px; }
 .vmodal { width: min(900px, 96vw); max-height: 86vh; overflow: auto; background: var(--color-bg-card); border: 1px solid var(--color-border-strong); border-radius: 16px; box-shadow: var(--shadow); padding: 22px; }
 .vmodal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 6px; }

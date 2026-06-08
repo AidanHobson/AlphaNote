@@ -46,6 +46,10 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface RiskMetric extends ValMetric { riskWhen: 'high' | 'low'; changeLabel: string; }
+export interface RiskGroup { key: string; name: string; blurb: string; stress: number; label: string; metrics: RiskMetric[]; }
+export interface RiskBoard { generatedAt: string; overall: number; label: string; groups: RiskGroup[]; }
+export interface RiskBrief { generatedAt: string; overall: number; label: string; provider: string; fellBack: boolean; text: string; }
 export interface InsiderTxn {
   id: string; symbol: string; company: string; sector: string; marketCap: number; insider: string;
   title: string; isOfficer: boolean; isDirector: boolean; isTenPercent: boolean; plan: string;

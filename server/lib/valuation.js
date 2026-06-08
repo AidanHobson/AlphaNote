@@ -50,7 +50,7 @@ async function multplSeries(slug, period = 'by-month') {
   });
 }
 
-async function fredSeries(id, units = 'lin') {
+export async function fredSeries(id, units = 'lin') {
   return cached(`fred:${id}:${units}`, async () => {
     const key = process.env.FRED_API_KEY || '';
     const u = units && units !== 'lin' ? `&units=${units}` : ''; // e.g. pc1 = % change from year ago
@@ -99,11 +99,12 @@ export function downsample(arr, n) {
 }
 const fmtAsOf = (date) => new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-function summarize(series, { richWhen }) {
-  // series newest-first
+export function summarize(series, { richWhen, changeBack = 1 }) {
+  // series newest-first; changeBack = how many observations back to measure the
+  // "recent change" (1 = prior obs for monthly; ~21 for a 1-month move on daily).
   const chrono = [...series].reverse();
   const latest = chrono[chrono.length - 1];
-  const prev = chrono[chrono.length - 2];
+  const prev = chrono[Math.max(0, chrono.length - 1 - changeBack)];
   const valuesAsc = chrono.map((p) => p.value).sort((a, b) => a - b);
   const valuePercentile = percentileOf(valuesAsc, latest.value);
   const richPercentile = richWhen === 'high' ? valuePercentile : 100 - valuePercentile;
@@ -111,7 +112,7 @@ function summarize(series, { richWhen }) {
     asOf: fmtAsOf(latest.date),
     asOfDate: latest.date,
     value: latest.value,
-    mom: prev ? Number((latest.value - prev.value).toFixed(2)) : 0,
+    mom: prev && prev !== latest ? Number((latest.value - prev.value).toFixed(2)) : 0,
     valuePercentile,
     richPercentile,
     richWhen,

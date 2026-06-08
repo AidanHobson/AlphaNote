@@ -9,6 +9,7 @@ const Valuation = lazy(() => import('./pages/Valuation'));
 const Macro = lazy(() => import('./pages/Macro'));
 const Economy = lazy(() => import('./pages/Economy'));
 const Factors = lazy(() => import('./pages/Factors'));
+const Risk = lazy(() => import('./pages/Risk'));
 const Earnings = lazy(() => import('./pages/Earnings'));
 const Insider = lazy(() => import('./pages/Insider'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'macro', element: <Macro /> },
       { path: 'economy', element: <Economy /> },
       { path: 'factors', element: <Factors /> },
+      { path: 'risk', element: <Risk /> },
       { path: 'earnings', element: <Earnings /> },
       { path: 'insider', element: <Insider /> },
       { path: 'watchlist', element: <Watchlist /> },

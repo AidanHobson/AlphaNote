@@ -15,6 +15,7 @@ import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
+import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
 import { getInsiderTransactions } from './lib/insider.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -240,6 +241,23 @@ app.get('/api/valuation/theme/:tab', wrap(async (req, res) => {
     return res.status(404).json({ error: `Unknown valuation lens "${tab}". Available: ${VALUATION_THEMES.join(', ')}.` });
   }
   res.json(await getValuationTheme(tab));
+}));
+
+// ── Risk Monitor (interest-rate / liquidity / FX stress gauges, FRED) ─────────
+app.get('/api/risk', wrap(async (req, res) => {
+  res.json(await getRiskBoard());
+}));
+
+app.get('/api/risk/brief', aiLimiter, wrap(async (req, res) => {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'Risk read unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await cached('brief:risk', 15 * 60_000, generateRiskBrief));
+  } catch (err) {
+    console.error('risk brief failed:', err.message);
+    res.status(502).json({ error: 'Could not generate the risk read right now. Please try again.' });
+  }
 }));
 
 // ── Insider Explorer (Form 4 open-market buys/sells, curated universe) ────────
