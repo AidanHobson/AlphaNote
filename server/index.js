@@ -17,6 +17,7 @@ import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurv
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
 import { getInsiderTransactions } from './lib/insider.js';
+import { startWarmer, getWarmSnapshot, warmerStatus } from './lib/warmer.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +70,7 @@ app.get('/api/health', (req, res) => {
         gemini: isProviderConfigured('gemini'),
       },
     },
+    warmer: warmerStatus(),
   });
 });
 
@@ -109,13 +111,15 @@ app.get('/api/market/movers', wrap(async (req, res) => {
     const symbols = String(req.query.symbols).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 40);
     return res.json(await getMoversBoard(symbols, false)); // custom set: uncached
   }
-  res.json(await getMoversBoard()); // default basket: cached 20s, empties not cached
+  // Prefer the background-warmed snapshot (always complete); fall back to a
+  // pull fetch only before the warmer has populated it (first seconds of boot).
+  res.json(getWarmSnapshot('movers') || await getMoversBoard());
 }));
 
-// ── Commodities board (ETF-proxy day moves; quotes only, cached 20s) ──────────
+// ── Commodities board (ETF-proxy day moves; warmed snapshot, else pull) ───────
 app.get('/api/market/commodities', wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
-  res.json(await getCommoditiesBoard());
+  res.json(getWarmSnapshot('commodities') || await getCommoditiesBoard());
 }));
 
 // ── ReturnSignal-style: wire feed for the bottom ticker marquee ────────────────
@@ -161,7 +165,7 @@ app.post('/api/ai/insight', aiLimiter, wrap(async (req, res) => {
 // ── Macro board (grouped ETF-proxy returns + cross-asset tone) ────────────────
 app.get('/api/macro', wrap(async (req, res) => {
   if (!requireFinnhub(res)) return;
-  res.json(await getMacroBoard());
+  res.json(getWarmSnapshot('macro') || await getMacroBoard());
 }));
 
 // ── AI: macro read (cross-asset narrative) ────────────────────────────────────
@@ -305,5 +309,7 @@ app.use((err, req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`\n  AlphaNote API → http://localhost:${PORT}  (${isProd ? 'production: serving client/dist' : 'dev: API only, run Vite separately'})`);
-  console.log(`  Finnhub: ${process.env.FINNHUB_API_KEY ? 'configured' : 'MISSING'}  |  AI: ${process.env.AI_PROVIDER || 'claude'} → ${process.env.AI_FALLBACK_PROVIDER || 'gemini'}\n`);
+  console.log(`  Finnhub: ${process.env.FINNHUB_API_KEY ? 'configured' : 'MISSING'}  |  AI: ${process.env.AI_PROVIDER || 'claude'} → ${process.env.AI_FALLBACK_PROVIDER || 'gemini'}`);
+  const warming = startWarmer();
+  console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}\n`);
 });
