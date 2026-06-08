@@ -1,7 +1,8 @@
 // Plotly chart (lazy-loaded as its own chunk, per the ReturnSignal guide).
-// Uses the dist-min build via the factory so Vite bundles it cleanly.
+// Uses the BASIC dist build (scatter + bar only — all this app draws) via the
+// factory: ~1MB vs the full build's ~4.7MB, a big cut to the chart chunk.
 import createPlotlyComponent from 'react-plotly.js/factory';
-import Plotly from 'plotly.js-dist-min';
+import Plotly from 'plotly.js-basic-dist-min';
 
 const Plot = createPlotlyComponent(Plotly);
 

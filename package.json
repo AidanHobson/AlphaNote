@@ -20,7 +20,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",
-    "plotly.js-dist-min": "^2.35.3",
+    "plotly.js-basic-dist-min": "^2.35.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-plotly.js": "^2.6.0",
