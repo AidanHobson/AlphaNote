@@ -1,0 +1,13 @@
+# Secrets scanning — blocks commits containing anything that looks like an API
+# key, token, or password before it can reach git history.
+#
+# Enable once per clone:
+#   pipx install pre-commit   (or: brew install pre-commit)
+#   pre-commit install
+# Run on demand against the whole tree:
+#   pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks

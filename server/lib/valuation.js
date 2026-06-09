@@ -9,9 +9,26 @@
 const FRED_BASE = 'https://api.stlouisfed.org/fred';
 
 // ── fetch helpers ─────────────────────────────────────────────────────────────
+
+// Scrub secret-looking material (query-string keys, long hex / sk- tokens) from
+// any string before it's logged or returned to the client. Defense-in-depth so an
+// upstream error can never carry a credential out to the browser.
+export function redactSecrets(s) {
+  if (typeof s !== 'string') return s;
+  return s
+    .replace(/([?&](?:api_key|apikey|token|access_token|key)=)[^&\s]+/gi, '$1REDACTED')
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}/g, 'REDACTED')
+    .replace(/\b[A-Fa-f0-9]{32,}\b/g, 'REDACTED');
+}
+
 async function fetchText(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (AlphaNote research dashboard)' } });
-  if (!res.ok) throw new Error(`${url} → ${res.status}`);
+  if (!res.ok) {
+    // Never surface the query string — for FRED it carries the api_key.
+    let where = url;
+    try { const u = new URL(url); where = `${u.host}${u.pathname}`; } catch { /* keep as-is */ }
+    throw new Error(`${where} → ${res.status}`);
+  }
   return res.text();
 }
 
@@ -164,7 +181,7 @@ export async function getMarketValuation() {
         }
         return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: true, ...summarize(series, { richWhen: m.richWhen }) };
       } catch (e) {
-        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message };
+        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: redactSecrets(e.message) };
       }
     })
   );
@@ -198,7 +215,7 @@ export async function getYields() {
         // tab renders neutrally (yields aren't "rich/cheap" like valuations).
         return { key: m.key, label: m.label, unit: '%', description: m.description, available: true, ...summarize(series, { richWhen: 'high' }) };
       } catch (e) {
-        return { key: m.key, label: m.label, unit: '%', description: m.description, available: false, reason: e.message };
+        return { key: m.key, label: m.label, unit: '%', description: m.description, available: false, reason: redactSecrets(e.message) };
       }
     })
   );
@@ -267,7 +284,7 @@ export async function getValuationTheme(tabRaw) {
         if (!series || series.length < 8) throw new Error('insufficient history');
         return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: true, ...summarize(series, { richWhen: 'high' }) };
       } catch (e) {
-        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message };
+        return { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: redactSecrets(e.message) };
       }
     })
   );

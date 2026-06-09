@@ -4,7 +4,7 @@
 // engine's fredSeries + summarize. A composite stress score per category and an
 // overall read drive the dashboard; an AI "Risk Read" narrates the picture.
 
-import { fredSeries, multplSeries, summarize, percentileOf, downsample } from './valuation.js';
+import { fredSeries, multplSeries, summarize, percentileOf, downsample, redactSecrets } from './valuation.js';
 import { callAIWithFallback } from './ai-provider.js';
 
 // Annualised rolling realised volatility (%), newest-first, from a price level
@@ -189,7 +189,7 @@ export async function getRiskBoard() {
             };
             return { metric, series, riskWhen: m.riskWhen };
           } catch (e) {
-            return { metric: { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: e.message }, series: null };
+            return { metric: { key: m.key, label: m.label, unit: m.unit, description: m.description, available: false, reason: redactSecrets(e.message) }, series: null };
           }
         })
       );

@@ -13,7 +13,9 @@ import { ADVANCED_CHART, TECHNICAL, SYMBOL_PROFILE, FINANCIALS } from '../lib/tv
 
 export default function Explorer() {
   const [params] = useSearchParams();
-  const symbol = (params.get('symbol') || '').toUpperCase().trim();
+  // Constrain to a real ticker charset (letters, digits, . : _ -) so nothing odd
+  // from the URL flows into API calls or the TradingView embed config.
+  const symbol = (params.get('symbol') || '').toUpperCase().replace(/[^A-Z0-9.:_-]/g, '').slice(0, 20);
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
   const [hero, setHero] = useState<{ quote?: Quote; profile?: Profile; error?: string } | null>(null);
   const [consensus, setConsensus] = useState<{ label: string; total: number } | null>(null);

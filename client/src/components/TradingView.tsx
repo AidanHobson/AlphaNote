@@ -24,7 +24,9 @@ export default function TradingView({ scriptName, config, height = 460 }: { scri
       const script = document.createElement('script');
       script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${scriptName}.js`;
       script.async = true;
-      script.innerHTML = JSON.stringify({ ...config, width: '100%', height, autosize: true });
+      // textContent (not innerHTML) so the config is treated as raw text — a crafted
+      // symbol containing "</script>…" can never break out and inject markup.
+      script.textContent = JSON.stringify({ ...config, width: '100%', height, autosize: true });
       script.onerror = () => {
         if (retriesLeft > 0) setTimeout(() => load(retriesLeft - 1), 600);
         else widget.innerHTML = '<div class="empty" style="height:100%;display:grid;place-items:center;border:none;">Chart unavailable — could not reach TradingView.</div>';

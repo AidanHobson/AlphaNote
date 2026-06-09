@@ -28,9 +28,36 @@ const isProd = process.env.NODE_ENV === 'production';
 app.disable('x-powered-by');
 app.use(compression()); // gzip responses (the data endpoints ship large JSON)
 app.use(express.json({ limit: '256kb' }));
+
+// Content-Security-Policy: lock script/style/connect sources to 'self' plus the
+// few external origins the app genuinely needs — TradingView embeds (Explorer) and
+// the Google Fonts stylesheet. 'unsafe-inline' is required for React inline styles
+// only (style-src), NOT for scripts. This sharply limits the blast radius of any
+// injected markup.
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self'",
+  "img-src 'self' data: https:",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "script-src 'self' https://*.tradingview.com https://*.tradingview-widget.com",
+  "connect-src 'self' https://*.tradingview.com https://*.tradingview-widget.com",
+  "frame-src https://*.tradingview.com https://*.tradingview-widget.com",
+  "worker-src 'self' blob:",
+].join('; ');
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // clickjacking (legacy backstop to frame-ancestors)
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), browsing-topics=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', CSP);
+  // HSTS only when actually served over HTTPS (e.g. behind a proxy in production).
+  if (req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   next();
 });
 
