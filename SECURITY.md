@@ -47,12 +47,37 @@ styles **only** (not scripts), plus the Google Fonts stylesheet. `object-src 'no
   parsing), and the Explorer `?symbol=` param is constrained to a ticker charset —
   so a crafted symbol cannot break out of the embed `<script>`.
 
+## Authentication (multi-user)
+Accounts, sessions and per-user state live in a local SQLite DB (`server/lib/db.js`).
+Controls follow the guide's §5 checklist (`server/lib/auth.js`):
+- **Passwords** hashed with **bcrypt (cost 12)** — never stored or compared in
+  plaintext. Registration enforces username/length rules.
+- **Login is enumeration-resistant:** identical generic error for unknown-user vs
+  wrong-password, and a constant-time bcrypt compare against a dummy hash when the
+  user doesn't exist (no timing oracle).
+- **Sessions** are 32-byte random tokens stored server-side (so they're
+  **revocable** — logout deletes the row), delivered in an **`httpOnly`,
+  `SameSite=Lax`** cookie (`Secure` when over HTTPS) with a 7-day expiry.
+- **Brute-force defense:** the auth routes are rate-limited to 10 attempts / 15 min
+  per IP.
+- **Authorization:** all `/api` routes except `/health` and `/auth/*` are behind an
+  auth gate; per-user state is keyed to the session's user id (no IDOR — a user can
+  only read/write their own watchlist/notes).
+
+> The SQLite file suits a persistent process (local, Render, Railway, Fly). It does
+> **not** work on a read-only serverless filesystem (e.g. Vercel functions) — use a
+> hosted Postgres/managed SQLite there.
+
 ## Not applicable (and why)
-- **SQL injection** — no database; data comes from HTTP APIs, and all symbol/query
-  params are `encodeURIComponent`-escaped into URLs.
-- **AuthN/AuthZ, IDOR, mass assignment** — no user accounts or user-owned
-  resources; the API is read-only public market data.
-- **CSRF** — no cookies/sessions; the API is stateless JSON.
+- **SQL injection** — all DB access uses **parameterized prepared statements**
+  (better-sqlite3 bound params); external data comes from HTTP APIs with
+  `encodeURIComponent`-escaped params.
+- **CSRF** — the session cookie is `SameSite=Lax` and the API only accepts JSON
+  (`Content-Type: application/json`), so cross-site form posts can't drive it. (A
+  CSRF token would be the next step if cookie auth is exposed to third-party origins.)
+- **Mass assignment** — endpoints read only the specific fields they expect
+  (`username`/`password`, `watchlist`/`notes`), never spread request bodies into
+  records.
 
 ## AI-specific risks
 - The AI market/macro/risk briefs take news headlines and computed data as input.

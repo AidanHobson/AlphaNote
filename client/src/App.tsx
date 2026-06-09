@@ -1,6 +1,8 @@
 import { lazy } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import Shell from './layout/Shell';
+import { AuthProvider, useAuth } from './lib/auth';
+import Login from './pages/Login';
 
 // Code-split each route into its own chunk (ReturnSignal pattern).
 const DailyUpdate = lazy(() => import('./pages/DailyUpdate'));
@@ -37,6 +39,20 @@ const router = createBrowserRouter([
   },
 ]);
 
-export default function App() {
+// Auth gate: the whole app is behind a login. Until authenticated we show the
+// Login screen instead of the router; once signed in, the dashboard mounts at the
+// current URL (deep links preserved).
+function Root() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="login-screen"><div className="login-loading">Loading…</div></div>;
+  if (!user) return <Login />;
   return <RouterProvider router={router} />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Root />
+    </AuthProvider>
+  );
 }

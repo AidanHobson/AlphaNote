@@ -286,3 +286,21 @@ button { font-family: inherit; }
 .menu-btn { display: none; }
 .scrim { display: none; }
 .scrim.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 55; }
+
+/* ── Login ──────────────────────────────────────────────────────────────── */
+.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--color-bg-base); }
+.login-loading { color: var(--color-text-muted); font-size: 14px; }
+.login-card { width: 100%; max-width: 380px; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: 16px; padding: 28px 26px; display: flex; flex-direction: column; gap: 12px; }
+.login-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16px; }
+.login-brand .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--color-accent); color: #fff; display: grid; place-items: center; font-size: 18px; }
+.login-card h1 { margin: 8px 0 0; font-size: 22px; }
+.login-sub { margin: 0 0 6px; color: var(--color-text-secondary); font-size: 13.5px; }
+.login-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--color-text-secondary); font-weight: 600; }
+.login-field input { padding: 11px 13px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg-base); color: var(--color-text-primary); font-size: 14px; outline: none; }
+.login-field input:focus { border-color: var(--color-accent); }
+.login-submit { margin-top: 6px; padding: 11px; font-size: 14px; justify-content: center; }
+.login-toggle { font-size: 13px; color: var(--color-text-secondary); text-align: center; margin-top: 2px; }
+.linklike { background: none; border: none; color: var(--color-accent); font-weight: 600; cursor: pointer; font-size: 13px; padding: 0; }
+.linklike:hover { text-decoration: underline; }
+.login-foot { text-align: center; color: var(--color-text-muted); font-size: 11.5px; margin-top: 6px; }
+.user-chip { font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); padding: 4px 10px; border-radius: 999px; background: var(--color-bg-elevated); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

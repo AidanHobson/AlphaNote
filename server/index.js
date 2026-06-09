@@ -18,6 +18,11 @@ import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } fr
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
 import { getInsiderTransactions } from './lib/insider.js';
 import { startWarmer, getWarmSnapshot, warmerStatus } from './lib/warmer.js';
+import {
+  validateCredentials, registerUser, verifyLogin, createSession, destroySession,
+  attachUser, requireAuth, sessionCookie, clearCookie, isSecureRequest,
+  getUserState, putUserState,
+} from './lib/auth.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,6 +77,11 @@ const aiLimiter = rateLimit({
   windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
   message: { error: 'AI request limit reached — please wait a minute.' },
 });
+// Strict cap on auth attempts — brute-force / credential-stuffing defense (guide §5).
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many attempts. Please wait 15 minutes and try again.' },
+});
 app.use('/api', apiLimiter);
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -99,6 +109,60 @@ app.get('/api/health', (req, res) => {
     },
     warmer: warmerStatus(),
   });
+});
+
+// ── Auth (public: register / login / me / logout) ─────────────────────────────
+const setSession = (req, res, userId) => res.setHeader('Set-Cookie', sessionCookie(createSession(userId), { secure: isSecureRequest(req) }));
+
+app.post('/api/auth/register', authLimiter, wrap(async (req, res) => {
+  const { username, password } = req.body || {};
+  const invalid = validateCredentials(username, password);
+  if (invalid) return res.status(400).json({ error: invalid });
+  try {
+    const user = await registerUser(username, password);
+    setSession(req, res, user.id);
+    res.status(201).json({ user: { username: user.username } });
+  } catch (err) {
+    if (err.code === 'TAKEN') return res.status(409).json({ error: err.message });
+    console.error('register failed:', err.message);
+    res.status(500).json({ error: 'Could not create the account right now.' });
+  }
+}));
+
+app.post('/api/auth/login', authLimiter, wrap(async (req, res) => {
+  const { username, password } = req.body || {};
+  const user = await verifyLogin(username, password);
+  // Identical generic error for unknown user vs wrong password (no enumeration).
+  if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
+  setSession(req, res, user.id);
+  res.json({ user: { username: user.username } });
+}));
+
+app.post('/api/auth/logout', (req, res) => {
+  attachUser(req);
+  if (req.sessionToken) destroySession(req.sessionToken);
+  res.setHeader('Set-Cookie', clearCookie());
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = attachUser(req);
+  if (!user) return res.status(401).json({ error: 'Not authenticated.' });
+  res.json({ user: { username: user.username } });
+});
+
+// ── Auth gate: everything below requires a valid session ──────────────────────
+app.use('/api', (req, res, next) => {
+  if (attachUser(req)) return next();
+  res.status(401).json({ error: 'Authentication required. Please log in.' });
+});
+
+// ── Per-user state (watchlist + notes) ────────────────────────────────────────
+app.get('/api/user/state', (req, res) => res.json(getUserState(req.user.id)));
+app.put('/api/user/state', (req, res) => {
+  const { watchlist, notes } = req.body || {};
+  putUserState(req.user.id, watchlist, notes);
+  res.json({ ok: true });
 });
 
 // ── Search / quote / profile / watchlist / news (from OpenStock) ──────────────
