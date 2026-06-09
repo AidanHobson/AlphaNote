@@ -113,6 +113,31 @@ export function requireAuth(req, res, next) {
   next();
 }
 
+// ── admin role (env-driven, never self-service) ──────────────────────────────
+// Admin status is derived from the ADMIN_USERNAMES env var (comma-separated,
+// case-insensitive) — so it can only be granted by someone with server config
+// access, never by a user calling the API. Read lazily so it always reflects env.
+function adminSet() {
+  return new Set((process.env.ADMIN_USERNAMES || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+}
+export function isAdminUsername(username) {
+  return typeof username === 'string' && adminSet().has(username.toLowerCase());
+}
+// Shape sent to the client — never includes the hash or internal id.
+export function publicUser(user) {
+  return user ? { username: user.username, isAdmin: isAdminUsername(user.username) } : null;
+}
+export function requireAdmin(req, res, next) {
+  if (!req.user) attachUser(req);
+  if (!req.user) return res.status(401).json({ error: 'Authentication required. Please log in.' });
+  if (!isAdminUsername(req.user.username)) return res.status(403).json({ error: 'Admin access required.' });
+  next();
+}
+const qListUsers = db.prepare('SELECT id, username, created_at FROM users ORDER BY id');
+export function listUsers() {
+  return qListUsers.all().map((u) => ({ id: u.id, username: u.username, createdAt: u.created_at, isAdmin: isAdminUsername(u.username) }));
+}
+
 // ── per-user state ───────────────────────────────────────────────────────────
 export function getUserState(userId) {
   const row = q.getState.get(userId) || { watchlist: '[]', notes: '{}' };

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 
 const NAV = [
   { group: 'Markets', items: [
@@ -21,6 +22,7 @@ const NAV = [
 ];
 
 export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
+  const { user } = useAuth();
   return (
     <aside className={`sidebar ${open ? 'open' : ''}`}>
       <div className="brand">
@@ -41,6 +43,15 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
           ))}
         </div>
       ))}
+
+      {user?.isAdmin && (
+        <div>
+          <div className="nav-group-label">Admin</div>
+          <NavLink to="/admin" onClick={onNavigate} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <span className="ico">🛡️</span> Admin
+          </NavLink>
+        </div>
+      )}
 
       <div className="spacer" />
     </aside>

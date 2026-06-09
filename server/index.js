@@ -20,8 +20,8 @@ import { getInsiderTransactions } from './lib/insider.js';
 import { startWarmer, getWarmSnapshot, warmerStatus } from './lib/warmer.js';
 import {
   validateCredentials, registerUser, verifyLogin, createSession, destroySession,
-  attachUser, requireAuth, sessionCookie, clearCookie, isSecureRequest,
-  getUserState, putUserState,
+  attachUser, requireAuth, requireAdmin, sessionCookie, clearCookie, isSecureRequest,
+  getUserState, putUserState, publicUser, listUsers,
 } from './lib/auth.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -121,7 +121,7 @@ app.post('/api/auth/register', authLimiter, wrap(async (req, res) => {
   try {
     const user = await registerUser(username, password);
     setSession(req, res, user.id);
-    res.status(201).json({ user: { username: user.username } });
+    res.status(201).json({ user: publicUser(user) });
   } catch (err) {
     if (err.code === 'TAKEN') return res.status(409).json({ error: err.message });
     console.error('register failed:', err.message);
@@ -135,7 +135,7 @@ app.post('/api/auth/login', authLimiter, wrap(async (req, res) => {
   // Identical generic error for unknown user vs wrong password (no enumeration).
   if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
   setSession(req, res, user.id);
-  res.json({ user: { username: user.username } });
+  res.json({ user: publicUser(user) });
 }));
 
 app.post('/api/auth/logout', (req, res) => {
@@ -148,7 +148,7 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/auth/me', (req, res) => {
   const user = attachUser(req);
   if (!user) return res.status(401).json({ error: 'Not authenticated.' });
-  res.json({ user: { username: user.username } });
+  res.json({ user: publicUser(user) });
 });
 
 // ── Auth gate: everything below requires a valid session ──────────────────────
@@ -164,6 +164,9 @@ app.put('/api/user/state', (req, res) => {
   putUserState(req.user.id, watchlist, notes);
   res.json({ ok: true });
 });
+
+// ── Admin only (env-designated admins) ────────────────────────────────────────
+app.get('/api/admin/users', requireAdmin, (req, res) => res.json({ users: listUsers() }));
 
 // ── Search / quote / profile / watchlist / news (from OpenStock) ──────────────
 app.get('/api/search', wrap(async (req, res) => {

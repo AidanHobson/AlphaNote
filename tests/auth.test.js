@@ -62,3 +62,16 @@ describe('register / login / sessions / state', () => {
     await expect(A.registerUser('dave', 'correcthorse9')).rejects.toThrow(/taken/i);
   }, 20000);
 });
+
+describe('admin role (env-driven, never self-service)', () => {
+  it('derives admin status from ADMIN_USERNAMES, case-insensitively', () => {
+    process.env.ADMIN_USERNAMES = 'TheAdmin, root';
+    expect(A.isAdminUsername('theadmin')).toBe(true);
+    expect(A.isAdminUsername('THEADMIN')).toBe(true);
+    expect(A.isAdminUsername('root')).toBe(true);
+    expect(A.isAdminUsername('regular_member')).toBe(false);
+    expect(A.publicUser({ username: 'TheAdmin' })).toEqual({ username: 'TheAdmin', isAdmin: true });
+    process.env.ADMIN_USERNAMES = '';
+    expect(A.isAdminUsername('theadmin')).toBe(false);
+  });
+});

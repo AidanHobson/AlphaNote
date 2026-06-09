@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { getJSON, postJSON } from './api';
 import { hydrateUserState, resetUserState } from './storage';
 
-export interface User { username: string; }
+export interface User { username: string; isAdmin: boolean; }
 
 interface AuthCtx {
   user: User | null;
