@@ -1,10 +1,4 @@
-# Security
 
-A pragmatic security pass for AlphaNote, mapped to the AthenaGuard "Vibe Coder's
-Security Handbook". AlphaNote is a **read-only markets-research dashboard**: a
-React SPA plus an Express API that proxies public data sources (Finnhub, FRED,
-multpl, World Bank, sec-api.io, API Ninjas) and two AI providers (Claude → Gemini).
-There is **no database, no user accounts, no authentication, and no PII**.
 
 ## Secrets management
 - All credentials are read from environment variables (`server/lib/env.js` loads
