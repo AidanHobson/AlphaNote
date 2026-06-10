@@ -2,6 +2,7 @@ import './lib/env.js'; // load .env (override) before anything reads process.env
 import express from 'express';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cached } from './lib/apicache.js';
@@ -15,6 +16,7 @@ import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getFundamentals } from './lib/fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
+import { startBackups, runBackupNow, listBackups, isBackupName, backupDir } from './lib/backup.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -190,6 +192,20 @@ app.post('/api/admin/users/:id/approve', requireAdmin, (req, res) => {
 app.post('/api/admin/users/:id/disable', requireAdmin, (req, res) => {
   const ok = setUserStatus(Number(req.params.id), 'disabled');
   res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'User not found.' });
+});
+
+// ── Admin: database backups (list / trigger / download a snapshot) ────────────
+app.get('/api/admin/backups', requireAdmin, (req, res) => res.json({ backups: listBackups() }));
+app.post('/api/admin/backups/run', requireAdmin, wrap(async (req, res) => {
+  res.json({ ok: true, backups: await runBackupNow() });
+}));
+app.get('/api/admin/backups/:name/download', requireAdmin, (req, res) => {
+  const { name } = req.params;
+  // strict allowlist of the generated filename shape — no traversal possible
+  if (!isBackupName(name)) return res.status(400).json({ error: 'Invalid backup name.' });
+  const file = path.join(backupDir(), name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Backup not found.' });
+  res.download(file);
 });
 
 // ── Search / quote / profile / watchlist / news (from OpenStock) ──────────────
@@ -444,5 +460,6 @@ app.listen(PORT, () => {
   console.log(`\n  AlphaNote API → http://localhost:${PORT}  (${isProd ? 'production: serving client/dist' : 'dev: API only, run Vite separately'})`);
   console.log(`  Finnhub: ${process.env.FINNHUB_API_KEY ? 'configured' : 'MISSING'}  |  AI: ${process.env.AI_PROVIDER || 'claude'} → ${process.env.AI_FALLBACK_PROVIDER || 'gemini'}`);
   const warming = startWarmer();
-  console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}\n`);
+  const backups = startBackups();
+  console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}  |  DB backups: ${backups ? 'daily (keep 7)' : 'off'}\n`);
 });

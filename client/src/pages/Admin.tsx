@@ -5,6 +5,9 @@ import { SkeletonLines } from '../components/Skeleton';
 
 type Status = 'pending' | 'active' | 'disabled';
 interface AdminUser { id: number; username: string; createdAt: number; status: Status; isAdmin: boolean; }
+interface Backup { name: string; bytes: number; createdAt: number; }
+
+const fmtBytes = (b: number) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const statusStyle: Record<Status, React.CSSProperties> = {
   pending: { color: 'var(--color-warn)' },
@@ -16,11 +19,28 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [backups, setBackups] = useState<Backup[] | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupErr, setBackupErr] = useState('');
 
   const load = useCallback(() => {
     getJSON<{ users: AdminUser[] }>('/api/admin/users').then((d) => setUsers(d.users)).catch((e) => setError(e.message));
+    getJSON<{ backups: Backup[] }>('/api/admin/backups').then((d) => setBackups(d.backups)).catch((e) => setBackupErr(e.message));
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const backupNow = async () => {
+    setBackupBusy(true);
+    setBackupErr('');
+    try {
+      const d = await postJSON<{ backups: Backup[] }>('/api/admin/backups/run', {});
+      setBackups(d.backups);
+    } catch (e) {
+      setBackupErr(e instanceof Error ? e.message : 'Backup failed.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
 
   const act = async (id: number, action: 'approve' | 'disable') => {
     setBusyId(id);
@@ -70,6 +90,36 @@ export default function Admin() {
           </table>
         )}
       </Card>
+
+      <div style={{ marginTop: 18 }}>
+        <Card
+          title="Database backups"
+          sub="daily · keeps 7"
+          right={<button className="btn sm primary" disabled={backupBusy} onClick={backupNow}>{backupBusy ? 'Backing up…' : 'Back up now'}</button>}
+        >
+          {backupErr && <div className="error-banner" style={{ marginBottom: 12 }}>{backupErr}</div>}
+          {!backups ? <SkeletonLines lines={3} /> : backups.length === 0 ? (
+            <div className="empty" style={{ border: 'none' }}>No snapshots yet — the first daily backup runs shortly after boot, or take one now.</div>
+          ) : (
+            <table className="mtable">
+              <thead><tr><th>Snapshot</th><th className="num">Size</th><th className="num">Created</th><th className="num"></th></tr></thead>
+              <tbody>
+                {backups.map((b) => (
+                  <tr key={b.name} style={{ cursor: 'default' }}>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}>{b.name}</td>
+                    <td className="num">{fmtBytes(b.bytes)}</td>
+                    <td className="num">{new Date(b.createdAt).toLocaleString()}</td>
+                    <td className="num"><a className="btn sm" href={`/api/admin/backups/${encodeURIComponent(b.name)}/download`}>Download</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 10 }}>
+            Snapshots live on the server's persistent disk. Download one periodically for an off-site copy — restoring is just replacing the DB file with a snapshot.
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -17,11 +17,12 @@ npm-debug.log*
 # server-side disk cache
 .insider-cache.json
 
-# SQLite user database (accounts, sessions, per-user state)
+# SQLite user database (accounts, sessions, per-user state) + snapshots
 alphanote.db
 alphanote.db-wal
 alphanote.db-shm
 *.db
+db-backups/
 
 # local editor / preview tooling
 .claude/

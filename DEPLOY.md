@@ -37,7 +37,11 @@ real use. To try it free anyway: remove the `disk:` block and `DB_PATH`, and set
   (mitigated by the server-side warmer + caches), EODHD ~20 req/day (12h cache),
   AI calls cost real money (rate-limited 20/min). A handful of approved users is
   comfortable; a crowd is not.
-- **Backups:** `alphanote.db` is a single file on the disk. A cron job (Render
-  cron or in-app) copying it to object storage is the simple backup story.
+- **Backups:** built in. The app snapshots `alphanote.db` daily (online backup,
+  safe while running) into `db-backups/` next to the DB on the persistent disk,
+  keeping the newest 7. The Admin page lists snapshots with **Back up now** and
+  **Download** buttons — download one periodically for an off-site copy.
+  Restoring = stop the service, replace the DB file with a snapshot, restart.
+  Disable with `BACKUPS_DISABLED=1`.
 - **CI** (build + tests + secret scan) runs on every push; deploys happen on
   push to `main` once the service is connected.
