@@ -14,6 +14,7 @@ import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
 import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getFundamentals } from './lib/fundamentals.js';
+import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -105,6 +106,7 @@ app.get('/api/health', (req, res) => {
     app: 'AlphaNote',
     integrations: {
       finnhub: Boolean(process.env.FINNHUB_API_KEY),
+      eodhd: isEodhdConfigured(),
       ai: {
         primary: process.env.AI_PROVIDER || 'claude',
         fallback: process.env.AI_FALLBACK_PROVIDER || 'gemini',
@@ -246,6 +248,11 @@ app.get('/api/daily-update/wire-feed', wrap(async (req, res) => {
     mode: articles.length ? 'live' : 'quiet',
     items: articles.map((a) => ({ headline: a.headline, source: a.source, url: a.url, datetime: a.datetime })),
   });
+}));
+
+// ── Price history (EODHD end-of-day; tight free quota → cached 12h) ───────────
+app.get('/api/history/:symbol', wrap(async (req, res) => {
+  res.json(await getPriceHistory(req.params.symbol));
 }));
 
 // ── Company fundamentals (SEC EDGAR XBRL — real financials from filings) ──────

@@ -7,6 +7,7 @@ import TradingView from '../components/TradingView';
 import AIInsight from '../components/AIInsight';
 import AnalystRatings from '../components/AnalystRatings';
 import Fundamentals from '../components/Fundamentals';
+import PriceHistory from '../components/PriceHistory';
 import WatchlistButton from '../components/WatchlistButton';
 import Skeleton from '../components/Skeleton';
 import { formatPrice, formatPct, changeDir, arrow, formatMarketCap } from '../lib/format';
@@ -77,6 +78,7 @@ export default function Explorer() {
       <div className="grid grid-2">
         <div className="grid" style={{ gridTemplateColumns: '1fr', alignContent: 'start' }}>
           <Card title="Price chart" sub="TradingView"><TradingView scriptName="advanced-chart" config={cfgChart} height={420} /></Card>
+          <PriceHistory symbol={symbol} />
           <Card title="Technicals"><TradingView scriptName="technical-analysis" config={TECHNICAL(symbol, theme)} height={380} /></Card>
         </div>
         <div className="grid" style={{ gridTemplateColumns: '1fr', alignContent: 'start' }}>

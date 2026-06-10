@@ -46,6 +46,12 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface HistoryPoint { date: string; close: number; volume: number | null; }
+export interface PriceHistory {
+  symbol: string; available: boolean; reason?: string; source?: string;
+  points?: HistoryPoint[];
+  stats?: { first: string; last: string; lastClose: number; changePercent: number; high: number; low: number };
+}
 export interface FundamentalLine { key: string; label: string; unit: 'usd' | 'perShare'; latest: number | null; history: { fy: number; val: number }[]; }
 export interface FundamentalRatio { label: string; value: number; unit: '%' | 'x'; }
 export interface Fundamentals {
