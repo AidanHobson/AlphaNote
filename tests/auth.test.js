@@ -20,6 +20,10 @@ describe('cookies', () => {
     expect(A.parseCookies('a=1; ag_session=tok123; b=2').ag_session).toBe('tok123');
     expect(A.parseCookies('')).toEqual({});
   });
+  it('does not throw on a malformed percent-encoded cookie (no 500 on the auth gate)', () => {
+    expect(() => A.parseCookies('ag_session=%')).not.toThrow();
+    expect(A.parseCookies('ag_session=%').ag_session).toBe('%'); // kept raw
+  });
   it('builds a hardened session cookie (HttpOnly, SameSite, Secure only when asked)', () => {
     const secure = A.sessionCookie('TOK', { secure: true });
     expect(secure).toContain('ag_session=TOK');

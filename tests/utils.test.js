@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { formatMarketCapValue, validateArticle, getDateRange, formatArticle } from '../server/lib/utils.js';
+import { formatMarketCapValue, validateArticle, getDateRange, formatArticle, boundedSet } from '../server/lib/utils.js';
+
+describe('boundedSet (cache cap)', () => {
+  it('evicts the oldest entry when over capacity', () => {
+    const m = new Map();
+    for (let i = 0; i < 5; i++) boundedSet(m, `k${i}`, i, 3);
+    expect(m.size).toBe(3);
+    expect(m.has('k0')).toBe(false); // oldest evicted
+    expect(m.has('k1')).toBe(false);
+    expect([...m.keys()]).toEqual(['k2', 'k3', 'k4']);
+  });
+  it('updating an existing key does not evict', () => {
+    const m = new Map([['a', 1], ['b', 2], ['c', 3]]);
+    boundedSet(m, 'b', 20, 3);
+    expect(m.size).toBe(3);
+    expect(m.get('b')).toBe(20);
+  });
+});
 
 describe('formatMarketCapValue', () => {
   it('formats trillions/billions/millions', () => {

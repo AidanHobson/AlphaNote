@@ -3,7 +3,7 @@
 // The API key stays server-side (read from process.env), never sent to the browser.
 
 import { POPULAR_STOCK_SYMBOLS, FINNHUB_EXCHANGE_SUFFIXES } from './constants.js';
-import { getDateRange, validateArticle, formatArticle } from './utils.js';
+import { getDateRange, validateArticle, formatArticle, boundedSet } from './utils.js';
 
 const BASE_URL = process.env.FINNHUB_BASE_URL || 'https://finnhub.io/api/v1';
 
@@ -20,7 +20,7 @@ async function cached(key, ttlSeconds, fn) {
   if (hit && now - hit.t < ttlSeconds * 1000) return hit.v;
   const v = await fn();
   // Don't cache nulls/empties for long — they're usually transient failures.
-  if (v != null) cacheStore.set(key, { t: now, v });
+  if (v != null) boundedSet(cacheStore, key, { t: now, v }, 800); // cap: keys are user symbols
   return v;
 }
 

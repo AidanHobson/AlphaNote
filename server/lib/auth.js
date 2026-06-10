@@ -99,7 +99,13 @@ export function parseCookies(header) {
   const out = {};
   (header || '').split(';').forEach((part) => {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i <= 0) return;
+    const raw = part.slice(i + 1).trim();
+    // A malformed percent-encoding (e.g. a stray "%") makes decodeURIComponent
+    // throw — don't let a crafted cookie 500 the auth gate; keep the raw value.
+    let value = raw;
+    try { value = decodeURIComponent(raw); } catch { /* keep raw */ }
+    out[part.slice(0, i).trim()] = value;
   });
   return out;
 }
@@ -112,7 +118,7 @@ export function clearCookie() {
   return `${COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
 }
 export function isSecureRequest(req) {
-  return Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https');
+  return Boolean(req.secure); // honors `trust proxy`; not a spoofable raw header
 }
 
 // ── express middleware ───────────────────────────────────────────────────────

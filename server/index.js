@@ -32,6 +32,10 @@ const PORT = process.env.PORT || 8080;
 const isProd = process.env.NODE_ENV === 'production';
 
 app.disable('x-powered-by');
+// Trust X-Forwarded-* only when explicitly running behind a proxy (set TRUST_PROXY
+// to the number of hops). Off by default so a directly-exposed server can't be
+// fooled by spoofed X-Forwarded-For (rate-limit keying) or X-Forwarded-Proto.
+app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false);
 app.use(compression()); // gzip responses (the data endpoints ship large JSON)
 app.use(express.json({ limit: '256kb' }));
 
@@ -62,8 +66,8 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), browsing-topics=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Content-Security-Policy', CSP);
-  // HSTS only when actually served over HTTPS (e.g. behind a proxy in production).
-  if (req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  // HSTS only when actually served over HTTPS (req.secure honors trust proxy).
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   next();
 });
 

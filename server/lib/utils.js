@@ -1,5 +1,12 @@
 // Server-side helpers ported from the original OpenStock `lib/utils.ts`.
 
+// Cap an in-memory Map cache so user-supplied keys (symbols, CIKs, queries) can't
+// grow it without bound — evicts the oldest entry (Maps keep insertion order).
+export function boundedSet(map, key, value, max) {
+  if (!map.has(key) && map.size >= max) map.delete(map.keys().next().value);
+  map.set(key, value);
+}
+
 export const getDateRange = (days) => {
   const toDate = new Date();
   const fromDate = new Date();

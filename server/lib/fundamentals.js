@@ -3,6 +3,8 @@
 // everything is cached aggressively: the ticker→CIK map (~24h) and each company's
 // facts blob (~12h). US filers only.
 
+import { boundedSet } from './utils.js';
+
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote markets-research dashboard';
 const HEADERS = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate' };
 
@@ -32,7 +34,7 @@ async function getFacts(cik) {
   const hit = factsCache.get(cik);
   if (hit && Date.now() - hit.t < FACTS_TTL) return hit.data;
   const data = await fetchJSON(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`);
-  factsCache.set(cik, { t: Date.now(), data });
+  boundedSet(factsCache, cik, { t: Date.now(), data }, 64); // cap: facts blobs are multi-MB
   return data;
 }
 
@@ -73,9 +75,12 @@ const LINE_ITEMS = [
 ];
 
 export async function getFundamentals(symbol) {
-  const sym = String(symbol || '').toUpperCase();
+  // Sanitize to the ticker charset before doing anything — never echo raw input back.
+  const sym = String(symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 12);
+  const notFound = () => ({ symbol: sym, available: false, reason: 'No SEC filer found for this ticker (US-listed companies only).' });
+  if (!sym) return notFound();
   const co = await getCompany(sym);
-  if (!co) return { symbol: sym, available: false, reason: 'No SEC filer found for this ticker (US-listed companies only).' };
+  if (!co) return notFound();
 
   const facts = await getFacts(co.cik);
   const series = {};
