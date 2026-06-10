@@ -1,0 +1,39 @@
+# Render blueprint — one-click deploy (render.com → New + → Blueprint → this repo).
+# Persistent process + writable disk: exactly what AlphaNote's SQLite (users/
+# sessions/notes) and background cache warmer need. Secrets are sync:false, so
+# Render prompts for them in the dashboard — values never live in this repo.
+services:
+  - type: web
+    name: alphanote
+    runtime: node
+    plan: starter # the persistent disk below requires a paid instance (~$7/mo)
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: alphanote-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /data/alphanote.db # SQLite lives on the persistent disk
+      - key: TRUST_PROXY
+        value: "1" # behind Render's proxy: real client IPs + Secure cookies/HSTS
+      - key: ADMIN_USERNAMES
+        sync: false # e.g. your admin username
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: SEC_API_KEY
+        sync: false
+      - key: NINJAS_API_KEY
+        sync: false
+      - key: EODHD_API_KEY
+        sync: false
+      - key: SEC_USER_AGENT
+        sync: false # e.g. "AlphaNote (you@example.com)" — SEC asks for a contact
