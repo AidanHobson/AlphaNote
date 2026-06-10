@@ -18,7 +18,8 @@ db.exec(`
     id            INTEGER PRIMARY KEY,
     username      TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    created_at    INTEGER NOT NULL
+    created_at    INTEGER NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'active'
   );
   CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT PRIMARY KEY,
@@ -36,5 +37,11 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 `);
+
+// Migration: add users.status to databases created before the approval flow.
+// Existing accounts default to 'active' (already implicitly approved).
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'status')) {
+  db.exec(`ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`);
+}
 
 export default db;

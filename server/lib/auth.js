@@ -20,9 +20,11 @@ export const COOKIE_NAME = 'ag_session';
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_COST);
 
 const q = {
-  userByName: db.prepare('SELECT id, username, password_hash FROM users WHERE username = ?'),
-  userById: db.prepare('SELECT id, username FROM users WHERE id = ?'),
-  insertUser: db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)'),
+  userByName: db.prepare('SELECT id, username, password_hash, status FROM users WHERE username = ?'),
+  userById: db.prepare('SELECT id, username, status FROM users WHERE id = ?'),
+  countUsers: db.prepare('SELECT COUNT(*) AS n FROM users'),
+  insertUser: db.prepare('INSERT INTO users (username, password_hash, created_at, status) VALUES (?, ?, ?, ?)'),
+  setStatus: db.prepare('UPDATE users SET status = ? WHERE id = ?'),
   insertSession: db.prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'),
   sessionByToken: db.prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?'),
   deleteSession: db.prepare('DELETE FROM sessions WHERE token = ?'),
@@ -46,10 +48,13 @@ export function validateCredentials(username, password) {
 // ── accounts ─────────────────────────────────────────────────────────────────
 export async function registerUser(username, password) {
   const hash = await bcrypt.hash(password, BCRYPT_COST);
+  // The very first account and any env-designated admin are auto-active (so you
+  // can't lock yourself out); everyone else starts 'pending' until an admin approves.
+  const status = q.countUsers.get().n === 0 || isAdminUsername(username) ? 'active' : 'pending';
   try {
-    const info = q.insertUser.run(username, hash, Date.now());
+    const info = q.insertUser.run(username, hash, Date.now(), status);
     q.initState.run(info.lastInsertRowid, Date.now());
-    return { id: Number(info.lastInsertRowid), username };
+    return { id: Number(info.lastInsertRowid), username, status };
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) { const err = new Error('That username is already taken.'); err.code = 'TAKEN'; throw err; }
     throw e;
@@ -60,7 +65,12 @@ export async function verifyLogin(username, password) {
   const user = typeof username === 'string' ? q.userByName.get(username) : null;
   // Always run a bcrypt compare (real or dummy) so timing doesn't reveal existence.
   const ok = await bcrypt.compare(typeof password === 'string' ? password : '', user ? user.password_hash : DUMMY_HASH);
-  return user && ok ? { id: user.id, username: user.username } : null;
+  return user && ok ? { id: user.id, username: user.username, status: user.status } : null;
+}
+
+export function setUserStatus(id, status) {
+  if (!['pending', 'active', 'disabled'].includes(status)) throw new Error('invalid status');
+  return q.setStatus.run(status, id).changes > 0;
 }
 
 // ── sessions ─────────────────────────────────────────────────────────────────
@@ -77,7 +87,11 @@ export function userForToken(token) {
   const s = q.sessionByToken.get(token);
   if (!s) return null;
   if (s.expires_at < Date.now()) { q.deleteSession.run(token); return null; }
-  return q.userById.get(s.user_id) || null;
+  const user = q.userById.get(s.user_id);
+  if (!user) return null;
+  // A user disabled/un-approved mid-session loses access immediately (env-admins exempt).
+  if (user.status !== 'active' && !isAdminUsername(user.username)) return null;
+  return user;
 }
 
 // ── cookies ──────────────────────────────────────────────────────────────────
@@ -133,9 +147,11 @@ export function requireAdmin(req, res, next) {
   if (!isAdminUsername(req.user.username)) return res.status(403).json({ error: 'Admin access required.' });
   next();
 }
-const qListUsers = db.prepare('SELECT id, username, created_at FROM users ORDER BY id');
+const qListUsers = db.prepare('SELECT id, username, created_at, status FROM users ORDER BY id');
 export function listUsers() {
-  return qListUsers.all().map((u) => ({ id: u.id, username: u.username, createdAt: u.created_at, isAdmin: isAdminUsername(u.username) }));
+  return qListUsers.all().map((u) => ({
+    id: u.id, username: u.username, createdAt: u.created_at, status: u.status, isAdmin: isAdminUsername(u.username),
+  }));
 }
 
 // ── per-user state ───────────────────────────────────────────────────────────

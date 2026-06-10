@@ -60,6 +60,10 @@ Controls follow the guide's §5 checklist (`server/lib/auth.js`):
   `SameSite=Lax`** cookie (`Secure` when over HTTPS) with a 7-day expiry.
 - **Brute-force defense:** the auth routes are rate-limited to 10 attempts / 15 min
   per IP.
+- **Admin approval:** new sign-ups are created `pending` and get **no session** —
+  an admin must approve them before they can log in (the first user and any
+  `ADMIN_USERNAMES` are auto-active so you can't lock yourself out). Disabling a
+  user revokes their access mid-session.
 - **Authorization:** all `/api` routes except `/health` and `/auth/*` are behind an
   auth gate; per-user state is keyed to the session's user id (no IDOR — a user can
   only read/write their own watchlist/notes).

@@ -7,16 +7,26 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setBusy(true);
     try {
-      if (mode === 'login') await login(username, password);
-      else await register(username, password);
-      // success → AuthProvider flips to the app
+      if (mode === 'login') {
+        await login(username, password); // success → AuthProvider flips to the app
+      } else {
+        const r = await register(username, password);
+        if (r.pending) {
+          // New accounts need admin approval before they can sign in.
+          setNotice(r.message || 'Account created — awaiting admin approval.');
+          setMode('login');
+          setPassword('');
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -33,6 +43,7 @@ export default function Login() {
           {mode === 'login' ? 'Welcome back to your markets research.' : 'Pick a username and a password (8+ characters).'}
         </p>
 
+        {notice && <div className="login-notice" role="status">{notice}</div>}
         {error && <div className="error-banner" role="alert">{error}</div>}
 
         <label className="login-field">
@@ -58,7 +69,7 @@ export default function Login() {
 
         <div className="login-toggle">
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <button type="button" className="linklike" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+          <button type="button" className="linklike" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setNotice(''); }}>
             {mode === 'login' ? 'Create one' : 'Sign in'}
           </button>
         </div>

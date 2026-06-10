@@ -42,6 +42,7 @@ describe('register / login / sessions / state', () => {
 
   it('issues and revokes sessions', async () => {
     const u = await A.registerUser('bob', 'correcthorse9');
+    A.setUserStatus(u.id, 'active'); // bob is pending by default (not the first user); approve to use a session
     const tok = A.createSession(u.id);
     expect(A.userForToken(tok)).toMatchObject({ username: 'bob' });
     A.destroySession(tok);
@@ -60,6 +61,32 @@ describe('register / login / sessions / state', () => {
   it('rejects duplicate usernames', async () => {
     await A.registerUser('dave', 'correcthorse9');
     await expect(A.registerUser('dave', 'correcthorse9')).rejects.toThrow(/taken/i);
+  }, 20000);
+});
+
+describe('approval flow', () => {
+  it('auto-activates the first user, leaves later sign-ups pending', async () => {
+    // alice (registered first, above) was auto-activated:
+    expect((await A.verifyLogin('alice', 'correcthorse9'))?.status).toBe('active');
+    const later = await A.registerUser('needsapproval', 'correcthorse9');
+    expect(later.status).toBe('pending');
+  }, 20000);
+
+  it('auto-activates env-designated admins', async () => {
+    process.env.ADMIN_USERNAMES = 'autoadmin';
+    const u = await A.registerUser('autoadmin', 'correcthorse9');
+    expect(u.status).toBe('active');
+    process.env.ADMIN_USERNAMES = '';
+  }, 20000);
+
+  it('userForToken blocks pending/disabled users (and restores on approve)', async () => {
+    const u = await A.registerUser('blockme', 'correcthorse9'); // pending
+    const tok = A.createSession(u.id);
+    expect(A.userForToken(tok)).toBeNull();            // pending → no access
+    A.setUserStatus(u.id, 'active');
+    expect(A.userForToken(tok)).toMatchObject({ username: 'blockme' });
+    A.setUserStatus(u.id, 'disabled');
+    expect(A.userForToken(tok)).toBeNull();            // disabled → access revoked
   }, 20000);
 });
 

@@ -6,6 +6,7 @@ import Card from '../components/Card';
 import TradingView from '../components/TradingView';
 import AIInsight from '../components/AIInsight';
 import AnalystRatings from '../components/AnalystRatings';
+import Fundamentals from '../components/Fundamentals';
 import WatchlistButton from '../components/WatchlistButton';
 import Skeleton from '../components/Skeleton';
 import { formatPrice, formatPct, changeDir, arrow, formatMarketCap } from '../lib/format';
@@ -84,6 +85,10 @@ export default function Explorer() {
           <Card title="Company profile"><TradingView scriptName="symbol-profile" config={SYMBOL_PROFILE(symbol, theme)} height={390} /></Card>
           <Card title="Financials"><TradingView scriptName="financials" config={FINANCIALS(symbol, theme)} height={430} /></Card>
         </div>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Fundamentals symbol={symbol} />
       </div>
     </div>
   );

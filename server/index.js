@@ -13,6 +13,7 @@ import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
 import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
+import { getFundamentals } from './lib/fundamentals.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -20,8 +21,8 @@ import { getInsiderTransactions } from './lib/insider.js';
 import { startWarmer, getWarmSnapshot, warmerStatus } from './lib/warmer.js';
 import {
   validateCredentials, registerUser, verifyLogin, createSession, destroySession,
-  attachUser, requireAuth, requireAdmin, sessionCookie, clearCookie, isSecureRequest,
-  getUserState, putUserState, publicUser, listUsers,
+  attachUser, requireAuth, requireAdmin, isAdminUsername, sessionCookie, clearCookie, isSecureRequest,
+  getUserState, putUserState, publicUser, listUsers, setUserStatus,
 } from './lib/auth.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -120,6 +121,10 @@ app.post('/api/auth/register', authLimiter, wrap(async (req, res) => {
   if (invalid) return res.status(400).json({ error: invalid });
   try {
     const user = await registerUser(username, password);
+    if (user.status !== 'active') {
+      // Pending approval: do NOT start a session — the account can't be used yet.
+      return res.status(202).json({ pending: true, message: 'Account created — an admin must approve it before you can sign in.' });
+    }
     setSession(req, res, user.id);
     res.status(201).json({ user: publicUser(user) });
   } catch (err) {
@@ -134,6 +139,10 @@ app.post('/api/auth/login', authLimiter, wrap(async (req, res) => {
   const user = await verifyLogin(username, password);
   // Identical generic error for unknown user vs wrong password (no enumeration).
   if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
+  // Correct credentials but not yet approved / disabled (env-admins are exempt).
+  if (user.status !== 'active' && !isAdminUsername(user.username)) {
+    return res.status(403).json({ error: user.status === 'disabled' ? 'This account has been disabled.' : 'Your account is awaiting admin approval.' });
+  }
   setSession(req, res, user.id);
   res.json({ user: publicUser(user) });
 }));
@@ -167,6 +176,15 @@ app.put('/api/user/state', (req, res) => {
 
 // ── Admin only (env-designated admins) ────────────────────────────────────────
 app.get('/api/admin/users', requireAdmin, (req, res) => res.json({ users: listUsers() }));
+
+app.post('/api/admin/users/:id/approve', requireAdmin, (req, res) => {
+  const ok = setUserStatus(Number(req.params.id), 'active');
+  res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'User not found.' });
+});
+app.post('/api/admin/users/:id/disable', requireAdmin, (req, res) => {
+  const ok = setUserStatus(Number(req.params.id), 'disabled');
+  res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'User not found.' });
+});
 
 // ── Search / quote / profile / watchlist / news (from OpenStock) ──────────────
 app.get('/api/search', wrap(async (req, res) => {
@@ -224,6 +242,16 @@ app.get('/api/daily-update/wire-feed', wrap(async (req, res) => {
     mode: articles.length ? 'live' : 'quiet',
     items: articles.map((a) => ({ headline: a.headline, source: a.source, url: a.url, datetime: a.datetime })),
   });
+}));
+
+// ── Company fundamentals (SEC EDGAR XBRL — real financials from filings) ──────
+app.get('/api/fundamentals/:symbol', wrap(async (req, res) => {
+  try {
+    res.json(await getFundamentals(req.params.symbol));
+  } catch (err) {
+    console.error('fundamentals failed:', err.message);
+    res.status(502).json({ error: 'Could not load SEC filings data right now.' });
+  }
 }));
 
 // ── Analyst ratings consensus (free /stock/recommendation) ────────────────────

@@ -302,6 +302,13 @@ button { font-family: inherit; }
 .login-toggle { font-size: 13px; color: var(--color-text-secondary); text-align: center; margin-top: 2px; }
 .linklike { background: none; border: none; color: var(--color-accent); font-weight: 600; cursor: pointer; font-size: 13px; padding: 0; }
 .linklike:hover { text-decoration: underline; }
+.login-notice { background: var(--color-up-soft); border: 1px solid var(--color-up); color: var(--color-up); padding: 11px 13px; border-radius: 10px; font-size: 13px; }
 .login-foot { text-align: center; color: var(--color-text-muted); font-size: 11.5px; margin-top: 6px; }
 .user-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); padding: 4px 10px; border-radius: 999px; background: var(--color-bg-elevated); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-badge { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--color-accent-soft); color: var(--color-accent); }
+
+/* ── Fundamentals (SEC filings) ─────────────────────────────────────────── */
+.fund-ratios { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 10px; }
+.fund-ratio { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; text-align: center; }
+.fund-ratio-val { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fund-ratio-lbl { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }

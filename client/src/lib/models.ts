@@ -46,6 +46,13 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface FundamentalLine { key: string; label: string; unit: 'usd' | 'perShare'; latest: number | null; history: { fy: number; val: number }[]; }
+export interface FundamentalRatio { label: string; value: number; unit: '%' | 'x'; }
+export interface Fundamentals {
+  symbol: string; available: boolean; reason?: string;
+  source?: string; cik?: string; name?: string; asOfFY?: number;
+  lineItems?: FundamentalLine[]; ratios?: FundamentalRatio[];
+}
 export interface RiskMetric extends ValMetric { riskWhen: 'high' | 'low'; changeLabel: string; }
 export interface RiskGroup { key: string; name: string; blurb: string; stress: number; label: string; history: number[]; metrics: RiskMetric[]; }
 export interface RiskBoard { generatedAt: string; overall: number; label: string; history: number[]; groups: RiskGroup[]; }

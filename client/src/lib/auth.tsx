@@ -8,7 +8,7 @@ interface AuthCtx {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<{ pending: boolean; message?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -43,8 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await apply(d.user);
   };
   const register = async (username: string, password: string) => {
-    const d = await postJSON<{ user: User }>('/api/auth/register', { username, password });
-    await apply(d.user);
+    const d = await postJSON<{ user?: User; pending?: boolean; message?: string }>('/api/auth/register', { username, password });
+    if (d.user) { await apply(d.user); return { pending: false }; }
+    return { pending: true, message: d.message }; // awaiting admin approval — no session
   };
   const logout = async () => {
     try { await postJSON('/api/auth/logout', {}); } catch { /* ignore */ }
