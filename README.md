@@ -225,6 +225,4 @@ formatters), i.e. the spots where bugs are easiest to introduce.
 
 ---
 
-Derived from the open-source **OpenStock** (© Open Dev Society, AGPL-3.0) and a
-ReturnSignal-architecture build guide. Structure & patterns only — no proprietary
-code or data.
+
