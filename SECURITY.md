@@ -18,10 +18,23 @@ There is **no database, no user accounts, no authentication, and no PII**.
 - Secrets scanning is configured via `.pre-commit-config.yaml` (gitleaks). Enable
   with `pre-commit install`; scan the tree with `pre-commit run --all-files`.
 
+### Key-security audit (last run 2026-06-11)
+Verified, with commands, across every place a key could leak:
+- **Storage:** all 7 keys (Finnhub, Anthropic, Gemini, sec-api.io, API Ninjas,
+  FRED, EODHD) live only in `.env` — gitignored and untracked.
+- **Git history:** every commit scanned for every real key pattern — zero hits.
+- **Client bundle:** zero key values in any built chunk (the only `API_KEY`
+  string in `client/dist` is a UI tooltip naming the env var). Client code reads
+  no env vars; all data flows through the server proxy.
+- **Runtime:** `/api/health` exposes configured/not booleans only; client-facing
+  error `reason`s pass through `redactSecrets()`; upstream errors carry HTTP
+  status only (URLs with tokens are never thrown or logged).
+- **Logs:** server output scanned — zero key fragments.
+
 > **Action — rotate the keys that were pasted into chat during development**
-> (Anthropic, Finnhub, Gemini, FRED, sec-api.io, API Ninjas). Pasting a real
-> credential anywhere outside `.env` should be treated as a disclosure: rotate,
-> revoke the old value, and check provider access logs.
+> (Anthropic, Finnhub, Gemini, FRED, sec-api.io, API Ninjas, EODHD). The code
+> can't protect a credential that was disclosed outside it: rotate, revoke the
+> old value, and check provider access logs.
 
 ## API hardening (Express)
 - **Rate limiting:** 300 req/min per IP on `/api`, plus a stricter 20 req/min on
