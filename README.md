@@ -1,6 +1,6 @@
 # AlphaNote
 
-**A markets-research dashboard — a hybrid of [ReturnSignal] and [OpenStock].**
+**A markets-research dashboard 
 
 AlphaNote takes ReturnSignal's professional analytics-dashboard architecture (a
 pure client-rendered **React + Vite + TypeScript** SPA, sidebar + topbar shell,
