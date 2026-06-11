@@ -165,3 +165,27 @@ export async function getManagerBoard(cikRaw) {
   boundedSet(cache, cik, { t: Date.now(), promise }, 16);
   return promise;
 }
+
+// Cross-reference one ticker against every tracked manager's latest 13F top
+// holdings. Boards are 12h-cached, so after the first warm-up this is free;
+// the time budget keeps a cold first call from stalling a research note.
+export async function findSymbolAcrossManagers(symbol, { budgetMs = 25_000 } = {}) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!sym) return [];
+  const results = [];
+  const queue = [...MANAGERS];
+  const workers = Array.from({ length: 4 }, async () => {
+    while (queue.length) {
+      const m = queue.shift();
+      try {
+        const board = await getManagerBoard(m.cik);
+        if (!board?.available) continue;
+        const h = board.holdings.find((x) => x.ticker === sym);
+        if (h) results.push({ manager: board.manager.name, period: board.period, value: h.value, pct: h.pct, change: h.change });
+      } catch { /* skip this manager */ }
+    }
+  });
+  // Partial results are fine — `results` is shared, so a timeout returns what's in.
+  await Promise.race([Promise.all(workers), new Promise((r) => setTimeout(r, budgetMs))]);
+  return results.sort((a, b) => b.value - a.value);
+}

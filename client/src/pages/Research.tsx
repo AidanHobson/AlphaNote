@@ -91,9 +91,12 @@ export default function Research() {
           </div>
           <div className="ai-foot">
             AI-generated · {providerLabel(note.provider)}{note.fellBack ? ' (primary unavailable)' : ''}
-            {' · '}sources: live quote{note.data.hasFundamentals ? ', SEC EDGAR fundamentals' : ''}
-            {note.data.hasHistory ? ', 1Y price history' : ''}, news, analyst ratings
+            {' · '}sources: live quote{note.data.hasFundamentals ? ', SEC EDGAR fundamentals + quarterly trend' : ''}
+            {note.data.hasValuation ? ', derived multiples' : ''}
+            {note.data.hasHistory ? ', 1Y price history vs SPY' : ''}, news, analyst ratings
+            {(note.data.managers13F ?? 0) > 0 ? `, ${note.data.managers13F} 13F manager${(note.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}
             {note.data.insiderCount > 0 ? `, ${note.data.insiderCount} insider filing${note.data.insiderCount > 1 ? 's' : ''}` : ''}
+            {note.data.nextEarnings ? ` · next earnings ${note.data.nextEarnings}` : ''}
             {' · '}generated {new Date(note.generatedAt).toLocaleTimeString()}{note.cached ? ' (cached)' : ''}
             {' · '}analysis, not investment advice
           </div>

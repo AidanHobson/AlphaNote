@@ -154,6 +154,8 @@ const LINE_ITEMS = [
   { key: 'equity', label: "Shareholders' Equity", kind: 'balance', tags: ['StockholdersEquity'] },
   { key: 'cash', label: 'Cash & Equivalents', kind: 'balance', tags: ['CashAndCashEquivalentsAtCarryingValue'] },
   { key: 'longTermDebt', label: 'Long-Term Debt', kind: 'balance', tags: ['LongTermDebtNoncurrent', 'LongTermDebt'] },
+  { key: 'depreciationAmortization', label: 'Depreciation & Amortization', kind: 'flow', tags: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'Depreciation'] },
+  { key: 'capex', label: 'Capital Expenditure', kind: 'flow', tags: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets', 'PaymentsForCapitalImprovements'] },
 ];
 
 export async function getFundamentals(symbol) {
@@ -218,8 +220,16 @@ export async function getFundamentals(symbol) {
     { label: 'Debt / equity', value: mult(cur.longTermDebt, cur.equity), unit: 'x' },
   ].filter((r) => r.value != null);
 
+  // Recent quarterly trajectory for the two headline flows — lets consumers
+  // (e.g. AI research notes) reason about sequential acceleration/deceleration.
+  const qFor = (key) => {
+    const def = LINE_ITEMS.find((d) => d.key === key);
+    return quarterlyPoints(facts, def.tags).slice(-8).map(({ end, val }) => ({ end, val }));
+  };
+  const quarterly = { revenue: qFor('revenue'), netIncome: qFor('netIncome') };
+
   return {
     symbol: sym, available: true, source: 'SEC EDGAR (XBRL)',
-    cik: co.cik, name: facts.entityName || co.title, asOfFY, currentThrough, lineItems, ratios,
+    cik: co.cik, name: facts.entityName || co.title, asOfFY, currentThrough, lineItems, ratios, quarterly,
   };
 }
