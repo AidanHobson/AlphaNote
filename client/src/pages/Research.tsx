@@ -150,7 +150,8 @@ export default function Research() {
           </div>
           <div className="ai-foot">
             Speculative AI analysis · {providerLabel(outlook.provider)}{outlook.fellBack ? ' (primary unavailable)' : ''}
-            {' · '}blends the model's general knowledge (which may be out of date) with {outlook.mode === 'stock' ? 'live market data' : 'no live data'}
+            {' · '}blends the model's general knowledge (which may be out of date) with {outlook.mode === 'stock' ? 'live market data' : 'no live market data'}
+            {(outlook.data.social?.length ?? 0) > 0 ? ` + last-30-days signal (${outlook.data.social!.join(', ')})` : ''}
             {' · '}verify tickers and figures in Deep research before acting
             {' · '}generated {new Date(outlook.generatedAt).toLocaleTimeString()}{outlook.cached ? ' (cached)' : ''}
             {' · '}not investment advice

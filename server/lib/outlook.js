@@ -8,6 +8,7 @@ import { getQuote, getCompanyProfile, getNextEarnings } from './finnhub.js';
 import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { computeValuation } from './research.js';
+import { getSocialPulse, socialPulseToLines } from './social.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, boundedSet } from './utils.js';
 
@@ -28,7 +29,7 @@ Write the outlook in exactly this structure:
 Two or three sentences: what it is, and why it could matter to public-market investors at all.
 
 **Why now**
-What has changed recently (technology, cost curves, policy, demand) that puts this theme on the clock — and how confident you are in each driver.
+What has changed recently (technology, cost curves, policy, demand) that puts this theme on the clock — and how confident you are in each driver. When a "Last 30 days" social/forum signal is provided, use it to ground what is actually being discussed right now (and note where current attention diverges from your prior knowledge).
 
 **Value chain**
 Bullets mapping the sub-segments (e.g. components → systems → applications) and where the economic leverage likely sits.
@@ -46,7 +47,7 @@ Why it might disappoint: technology risk, cost, competition, hype cycles, timing
 One or two genuinely speculative scenarios — low probability, high impact, clearly flagged as such.
 
 **What to watch**
-Concrete signposts: KPIs, product milestones, policy decisions, earnings lines that would confirm or kill the thesis.
+Concrete signposts: KPIs, product milestones, policy decisions, earnings lines that would confirm or kill the thesis. Where Polymarket odds are provided, cite them as the crowd's current probability on relevant outcomes.
 
 A final line starting with "Bottom line:" — your stance on the theme with a conviction score out of 5 and a time horizon (e.g. "Bottom line: constructive over 3-5 years, conviction 2/5 — early but real"). This is speculative analysis, not investment advice.
 
@@ -71,7 +72,7 @@ The bear case at its worst: disruption, multiple compression, thesis breaks.
 Qualitatively, how the risk/reward skews from today's valuation (use the derived multiples provided), and what you would need to believe for each side.
 
 **Signposts**
-Concrete, watchable indicators that the dream or the nightmare is starting to play out — anchor timing to the next earnings date when provided.
+Concrete, watchable indicators that the dream or the nightmare is starting to play out — anchor timing to the next earnings date when provided, and to any Polymarket odds or surge in recent discussion in the "Last 30 days" signal.
 
 A final line starting with "Bottom line:" — your speculative stance with a conviction score out of 5 and a time horizon. This is speculative analysis, not investment advice.
 
@@ -83,16 +84,18 @@ const fmtUsd = (v) => {
   return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `${sign}$${Math.abs(v).toLocaleString('en-US')}`;
 };
 
-export function buildThemePrompt(topic) {
-  return [
+export function buildThemePrompt(topic, pulse) {
+  const lines = [
     `Theme: ${topic}`,
     `Today's date: ${new Date().toISOString().slice(0, 10)} (your general knowledge may end earlier — caveat where it matters).`,
-    '',
-    'Write the speculative theme outlook now.',
-  ].join('\n');
+  ];
+  const social = socialPulseToLines(pulse);
+  if (social.length) lines.push('', ...social);
+  lines.push('', 'Write the speculative theme outlook now.');
+  return lines.join('\n');
 }
 
-export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings }) {
+export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -118,6 +121,8 @@ export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, his
   }
   if (nextEarnings?.date) lines.push(`Next scheduled earnings: ${nextEarnings.date}.`);
   lines.push(`Today's date: ${new Date().toISOString().slice(0, 10)}.`);
+  const social = socialPulseToLines(pulse);
+  if (social.length) lines.push('', ...social);
   lines.push('');
   lines.push('Write the speculative stock outlook now, anchored to the data above.');
   return lines.join('\n');
@@ -144,6 +149,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
   // Stock mode only when the topic is ticker-shaped AND has live market data.
   let mode = 'theme';
   let prompt; let system; let data = { name: topic };
+  let pulse = null;
   if (isTickerLike(topic)) {
     const sym = topic.toUpperCase();
     const quote = await getQuote(sym);
@@ -158,7 +164,9 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
       ]);
       const valuation = computeValuation(profile, fundamentals);
       const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
-      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings });
+      // 30-day social pulse keyed on the company name (falls back to ticker).
+      pulse = await getSocialPulse(profile?.name || sym).catch(() => null);
+      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse });
       system = STOCK_OUTLOOK_PROMPT;
       data = {
         name: profile?.name || sym,
@@ -171,7 +179,8 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
     }
   }
   if (mode === 'theme') {
-    prompt = buildThemePrompt(topic);
+    pulse = await getSocialPulse(topic).catch(() => null);
+    prompt = buildThemePrompt(topic, pulse);
     system = THEME_PROMPT;
   }
 
@@ -185,7 +194,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
     fellBack,
     text,
     generatedAt: new Date().toISOString(),
-    data,
+    data: { ...data, social: pulse ? pulse.sources.map((s) => s.source) : [] },
   };
   boundedSet(cache, key, { t: Date.now(), note }, 100);
   return { ...note, cached: false };

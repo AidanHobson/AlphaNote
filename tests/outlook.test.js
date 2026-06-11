@@ -28,6 +28,14 @@ describe('buildThemePrompt', () => {
     expect(p).toContain('Theme: Photonics');
     expect(p).toMatch(/Today's date: \d{4}-\d{2}-\d{2}/);
   });
+  it('embeds the last-30-days social pulse when provided', () => {
+    const pulse = { window: 'last 30 days', sources: [
+      { source: 'Hacker News', count: 12, items: [{ title: 'Silicon photonics breakthrough', points: 200, comments: 60 }] },
+    ] };
+    const p = buildThemePrompt('Photonics', pulse);
+    expect(p).toContain('Last 30 days — what people are actually discussing');
+    expect(p).toContain('Silicon photonics breakthrough" (200 pts, 60 comments)');
+  });
 });
 
 describe('buildStockOutlookPrompt', () => {
