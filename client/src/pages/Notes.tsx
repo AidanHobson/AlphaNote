@@ -6,6 +6,7 @@ import Card from '../components/Card';
 import { toast } from '../components/toast';
 import { getNotes, saveNote, deleteNote, onStorageChange, type Note } from '../lib/storage';
 import { formatPrice, formatPct } from '../lib/format';
+import { downloadNotesPdf } from '../lib/pdf';
 
 export default function Notes() {
   const [params] = useSearchParams();
@@ -53,13 +54,26 @@ export default function Notes() {
     return lines.join('\n');
   }, [ordered, quotes]);
 
-  const download = () => {
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `alphanote-research-${new Date().toISOString().slice(0, 10)}.md`;
-    a.click(); URL.revokeObjectURL(url);
-    toast('Report downloaded');
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const download = async () => {
+    setPdfBusy(true);
+    try {
+      await downloadNotesPdf(ordered.map((n) => {
+        const q = quotes[n.symbol];
+        return {
+          symbol: n.symbol,
+          company: q?.name,
+          priceLine: q ? `${formatPrice(q.price, q.currency)} (${formatPct(q.changePercent)})` : undefined,
+          text: n.text,
+          updatedAt: n.updatedAt,
+        };
+      }));
+      toast('PDF report downloaded');
+    } catch {
+      toast('Could not generate the PDF — please try again');
+    } finally {
+      setPdfBusy(false);
+    }
   };
   const copy = () => { navigator.clipboard.writeText(markdown).then(() => toast('Markdown copied')); };
 
@@ -68,7 +82,7 @@ export default function Notes() {
       <div className="page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <h1>Research Notes</h1>
-          <p>Jot a thesis per ticker, then export a Markdown research report.</p>
+          <p>Jot a thesis per ticker, then export a PDF research report.</p>
         </div>
         <div className="row">
           <button className="btn" onClick={() => setShowExport((s) => !s)}>{showExport ? 'Hide report' : '⤓ Export report'}</button>
@@ -76,8 +90,8 @@ export default function Notes() {
       </div>
 
       {showExport && (
-        <Card title="Markdown report" sub={`${ordered.length} note${ordered.length === 1 ? '' : 's'}`} style={{ marginBottom: 16 }}
-          right={<div className="row"><button className="btn sm" onClick={copy}>Copy</button><button className="btn sm primary" onClick={download}>Download .md</button></div>}>
+        <Card title="Research report" sub={`${ordered.length} note${ordered.length === 1 ? '' : 's'}`} style={{ marginBottom: 16 }}
+          right={<div className="row"><button className="btn sm" onClick={copy}>Copy markdown</button><button className="btn sm primary" onClick={download} disabled={pdfBusy}>{pdfBusy ? 'Generating…' : 'Download PDF'}</button></div>}>
           <div className="md-preview">{markdown}</div>
         </Card>
       )}
