@@ -9,6 +9,7 @@ import { cached } from './lib/apicache.js';
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
 import { generateStockInsight } from './lib/insight.js';
 import { generateResearchNote } from './lib/research.js';
+import { generateOutlook } from './lib/outlook.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -372,6 +373,25 @@ app.post('/api/ai/research', aiLimiter, wrap(async (req, res) => {
     recordError('research', err, { path: req.path });
     res.status(status).json({
       error: status === 404 ? err.message : 'The AI providers could not generate a research note right now. Please try again.',
+    });
+  }
+}));
+
+// ── AI: speculative outlook (theme or ticker) ────────────────────────────────
+app.post('/api/ai/outlook', aiLimiter, wrap(async (req, res) => {
+  const topic = req.body?.topic;
+  if (!topic) return res.status(400).json({ error: 'Please provide a theme or ticker.' });
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI outlooks unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await generateOutlook(topic, { force: req.body?.force === true }));
+  } catch (err) {
+    const status = err.statusCode || 502;
+    console.error('outlook failed:', err.message);
+    recordError('outlook', err, { path: req.path });
+    res.status(status).json({
+      error: status === 400 ? err.message : 'The AI providers could not generate an outlook right now. Please try again.',
     });
   }
 }));
