@@ -7,14 +7,14 @@ const providerKeyPrefix = ['sk', 'test', 'EXAMPLE'].join('-');
 const fakeProviderKey = `${providerKeyPrefix}${'0123456789'}_notreal`;
 
 describe('redactSecrets', () => {
-  // NB: all fixtures below are synthetic, key-SHAPED strings — never real keys.
   it('scrubs api_key/token query parameters', () => {
     const fakeKey = makeHex(32);
     const msg = `api.stlouisfed.org/fred/series/observations?series_id=GS10&api_key=${fakeKey}&file_type=json → 429`;
     const out = redactSecrets(msg);
+
     expect(out).not.toContain(fakeKey);
     expect(out).toContain('api_key=REDACTED');
-    expect(out).toContain('429'); // keeps the useful status
+    expect(out).toContain('429');
   });
 
   it('scrubs sk- style provider keys', () => {
@@ -36,11 +36,14 @@ describe('isFredConfigured (whitespace-tolerant key check)', () => {
   it('accepts a valid key even with a pasted trailing newline/space', async () => {
     const { isFredConfigured } = await import('../server/lib/fred.js');
     const saved = process.env.FRED_API_KEY;
+
     try {
       process.env.FRED_API_KEY = `${makeHex(32)}\n`;
       expect(isFredConfigured()).toBe(true);
+
       process.env.FRED_API_KEY = `  ${makeHex(32)} `;
       expect(isFredConfigured()).toBe(true);
+
       process.env.FRED_API_KEY = 'not-a-key';
       expect(isFredConfigured()).toBe(false);
     } finally {
