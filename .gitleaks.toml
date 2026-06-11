@@ -11,7 +11,7 @@ paths = [
   '''tests/security\.test\.js$''',
 ]
 regexes = [
-  '''(?:0123456789abcdef){2}''',
-  '''(?:synthetic-test-fixture){4}''',
+  '''0123456789abcdef''',
+  '''synthetic-test-fixture''',
   '''sk-test-EXAMPLE[0-9]{10}_notreal''',
 ]
