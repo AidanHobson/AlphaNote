@@ -65,13 +65,13 @@ export async function getCompanyProfile(symbol) {
 // Concurrency-limited so large baskets don't burst Finnhub's free-tier rate limit.
 export async function getWatchlistData(symbols) {
   if (!symbols || symbols.length === 0) return [];
-  // Hard cap the basket size (callers already slice, but bound it here too so the
-  // worker loop can never iterate over an unbounded user-supplied list).
-  symbols = symbols.slice(0, 100);
-  const out = new Array(symbols.length);
+  // Clamp to a constant so the worker loop's bound never comes from the raw
+  // (user-supplied) list length — callers also slice, this bounds it at source.
+  const count = Math.min(symbols.length, 100);
+  const out = new Array(count);
   let i = 0;
   const worker = async () => {
-    while (i < symbols.length) {
+    while (i < count) {
       const idx = i++;
       const sym = symbols[idx];
       const [quote, profile] = await Promise.all([getQuote(sym), getCompanyProfile(sym)]);
@@ -92,7 +92,7 @@ export async function getWatchlistData(symbols) {
       };
     }
   };
-  await Promise.all(Array.from({ length: Math.min(8, symbols.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(8, count) }, worker));
   return out;
 }
 

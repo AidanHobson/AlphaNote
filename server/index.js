@@ -2,7 +2,6 @@ import './lib/env.js'; // load .env (override) before anything reads process.env
 import express from 'express';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cached } from './lib/apicache.js';
@@ -19,7 +18,7 @@ import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
 import { isFredConfigured } from './lib/fred.js';
 import { getSizeBoard } from './lib/size.js';
 import { listManagers, getManagerBoard } from './lib/smartmoney.js';
-import { startBackups, runBackupNow, listBackups, isBackupName, backupDir } from './lib/backup.js';
+import { startBackups, runBackupNow, listBackups, backupDir } from './lib/backup.js';
 import { recordError, listErrors } from './lib/errlog.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
@@ -228,17 +227,13 @@ app.post('/api/admin/backups/run', requireAdmin, wrap(async (req, res) => {
   res.json({ ok: true, backups: await runBackupNow() });
 }));
 app.get('/api/admin/backups/:name/download', requireAdmin, (req, res) => {
-  // Defense in depth: strip any path components, allowlist the exact filename
-  // shape, then verify the resolved path stays inside the backup directory.
-  const name = path.basename(String(req.params.name || ''));
-  if (!isBackupName(name)) return res.status(400).json({ error: 'Invalid backup name.' });
-  const dir = path.resolve(backupDir());
-  const file = path.resolve(dir, name);
-  if (file !== path.join(dir, name) || !file.startsWith(dir + path.sep)) {
-    return res.status(400).json({ error: 'Invalid backup name.' });
-  }
-  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Backup not found.' });
-  res.download(file);
+  // Resolve the request against the server-generated backup list and serve the
+  // matched entry. The download path is built from the on-disk listing, never
+  // from the user-supplied parameter, so traversal is impossible by construction.
+  const requested = path.basename(String(req.params.name || ''));
+  const match = listBackups().find((b) => b.name === requested);
+  if (!match) return res.status(404).json({ error: 'Backup not found.' });
+  res.download(path.join(backupDir(), match.name));
 });
 
 // ── Search / quote / profile / watchlist / news (from OpenStock) ──────────────
