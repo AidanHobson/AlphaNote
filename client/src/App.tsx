@@ -14,6 +14,7 @@ const Factors = lazy(() => import('./pages/Factors'));
 const Risk = lazy(() => import('./pages/Risk'));
 const Earnings = lazy(() => import('./pages/Earnings'));
 const Insider = lazy(() => import('./pages/Insider'));
+const SmartMoney = lazy(() => import('./pages/SmartMoney'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Notes = lazy(() => import('./pages/Notes'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -34,6 +35,7 @@ const router = createBrowserRouter([
       { path: 'risk', element: <Risk /> },
       { path: 'earnings', element: <Earnings /> },
       { path: 'insider', element: <Insider /> },
+      { path: 'smart-money', element: <SmartMoney /> },
       { path: 'watchlist', element: <Watchlist /> },
       { path: 'notes', element: <Notes /> },
       { path: 'admin', element: <Admin /> },

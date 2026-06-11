@@ -313,3 +313,9 @@ button { font-family: inherit; }
 .fund-ratio { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; text-align: center; }
 .fund-ratio-val { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .fund-ratio-lbl { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+
+/* ── Smart Money manager pills ─────────────────────────────────────────── */
+.mgr-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.mgr-pill { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-bg-card); color: var(--color-text-secondary); font-weight: 600; font-size: 13px; cursor: pointer; }
+.mgr-pill:hover { border-color: var(--color-border-strong); color: var(--color-text-primary); }
+.mgr-pill.active { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent); }

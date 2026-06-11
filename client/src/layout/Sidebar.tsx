@@ -14,6 +14,7 @@ const NAV = [
     { to: '/factors', label: 'Factors', ico: '🧮' },
     { to: '/risk', label: 'Risk Monitor', ico: '⚠️' },
     { to: '/insider', label: 'Insider Explorer', ico: '🕵️' },
+    { to: '/smart-money', label: 'Smart Money', ico: '💼' },
     { to: '/earnings', label: 'Earnings', ico: '📅' },
   ]},
   { group: 'Research', items: [

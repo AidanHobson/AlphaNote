@@ -46,6 +46,21 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface SmartManager { cik: number; name: string; short: string; }
+export interface SmartHolding {
+  name: string; klass: string; ticker: string | null;
+  value: number; shares: number; pct: number;
+  change: { type: 'new' | 'add' | 'trim' | 'flat'; sharesPct?: number };
+}
+export interface SmartBoard {
+  available: boolean; reason?: string;
+  manager?: { cik: number; name: string };
+  period?: string; priorPeriod?: string | null;
+  totalValue?: number; positions?: number;
+  holdings?: SmartHolding[];
+  exits?: { name: string; cusip: string; priorValue: number }[];
+  source?: string;
+}
 export interface SizePeriod { label: string; small: number | null; large: number | null; spread: number | null; }
 export interface SizeBoard {
   available: boolean; reason?: string; generatedAt?: string; source?: string;
@@ -60,11 +75,16 @@ export interface PriceHistory {
   points?: HistoryPoint[];
   stats?: { first: string; last: string; lastClose: number; changePercent: number; high: number; low: number };
 }
-export interface FundamentalLine { key: string; label: string; unit: 'usd' | 'perShare'; latest: number | null; history: { fy: number; val: number }[]; }
+export interface FundamentalLine {
+  key: string; label: string; unit: 'usd' | 'perShare'; kind: 'flow' | 'balance';
+  latest: number | null;
+  current: { value: number; asOf: string; basis: 'ttm' | 'fy' | 'latest' } | null;
+  history: { fy: number; val: number }[];
+}
 export interface FundamentalRatio { label: string; value: number; unit: '%' | 'x'; }
 export interface Fundamentals {
   symbol: string; available: boolean; reason?: string;
-  source?: string; cik?: string; name?: string; asOfFY?: number;
+  source?: string; cik?: string; name?: string; asOfFY?: number; currentThrough?: string | null;
   lineItems?: FundamentalLine[]; ratios?: FundamentalRatio[];
 }
 export interface RiskMetric extends ValMetric { riskWhen: 'high' | 'low'; changeLabel: string; }

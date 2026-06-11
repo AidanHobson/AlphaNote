@@ -18,6 +18,7 @@ import { getFundamentals } from './lib/fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
 import { isFredConfigured } from './lib/fred.js';
 import { getSizeBoard } from './lib/size.js';
+import { listManagers, getManagerBoard } from './lib/smartmoney.js';
 import { startBackups, runBackupNow, listBackups, isBackupName, backupDir } from './lib/backup.js';
 import { recordError, listErrors } from './lib/errlog.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
@@ -296,6 +297,12 @@ app.get('/api/daily-update/wire-feed', wrap(async (req, res) => {
 // ── Price history (EODHD end-of-day; tight free quota → cached 12h) ───────────
 app.get('/api/history/:symbol', wrap(async (req, res) => {
   res.json(await getPriceHistory(req.params.symbol));
+}));
+
+// ── Smart Money (EDGAR 13F institutional holdings, curated managers) ──────────
+app.get('/api/smartmoney', (req, res) => res.json({ managers: listManagers() }));
+app.get('/api/smartmoney/:cik', wrap(async (req, res) => {
+  res.json(await getManagerBoard(req.params.cik));
 }));
 
 // ── Company fundamentals (SEC EDGAR XBRL — real financials from filings) ──────

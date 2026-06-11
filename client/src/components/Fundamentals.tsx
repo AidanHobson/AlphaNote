@@ -30,8 +30,15 @@ export default function Fundamentals({ symbol }: { symbol: string }) {
     getJSON<FData>(`/api/fundamentals/${encodeURIComponent(symbol)}`).then(setData).catch((e) => setError(e.message));
   }, [symbol]);
 
+  const fmtCell = (li: NonNullable<FData['lineItems']>[number], v: number | null) =>
+    li.unit === 'perShare' ? (v != null ? `$${v.toFixed(2)}` : '—') : fmtUSD(v);
+
   return (
-    <Card className="col-span-2" title="Fundamentals" sub={data?.available ? `SEC filings · FY${data.asOfFY}` : 'SEC filings'}>
+    <Card
+      className="col-span-2"
+      title="Fundamentals"
+      sub={data?.available ? `SEC filings · current through ${data.currentThrough || `FY${data.asOfFY}`}` : 'SEC filings'}
+    >
       {error ? <div className="error-banner">{error}</div>
         : !data ? <SkeletonLines lines={6} />
         : !data.available ? <div className="empty" style={{ border: 'none' }}>{data.reason}</div>
@@ -46,18 +53,30 @@ export default function Fundamentals({ symbol }: { symbol: string }) {
               ))}
             </div>
             <table className="mtable" style={{ marginTop: 14 }}>
-              <thead><tr><th>Line item</th><th className="num">FY{data.asOfFY}</th><th className="num">6-yr trend</th></tr></thead>
+              <thead><tr><th>Line item</th><th className="num">Current</th><th className="num">FY{data.asOfFY}</th><th className="num">6-yr trend</th></tr></thead>
               <tbody>
                 {data.lineItems!.map((li) => (
                   <tr key={li.key} style={{ cursor: 'default' }}>
                     <td>{li.label}</td>
-                    <td className="num">{li.unit === 'perShare' ? (li.latest != null ? `$${li.latest.toFixed(2)}` : '—') : fmtUSD(li.latest)}</td>
+                    <td className="num">
+                      {li.current ? (
+                        <span title={`as of ${li.current.asOf}`}>
+                          {fmtCell(li, li.current.value)}
+                          <span style={{ color: 'var(--color-text-muted)', fontSize: 10.5, marginLeft: 5 }}>
+                            {li.current.basis === 'ttm' ? 'TTM' : li.current.basis === 'latest' ? 'LTST' : 'FY'}
+                          </span>
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="num" style={{ color: 'var(--color-text-secondary)' }}>{fmtCell(li, li.latest)}</td>
                     <td className="num"><Spark values={li.history.map((p) => p.val)} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5, marginTop: 8 }}>Source: {data.source} · CIK {data.cik}</div>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5, marginTop: 8 }}>
+              Source: {data.source} · CIK {data.cik} · ratios use TTM flows over latest balance sheet
+            </div>
           </div>
         )}
     </Card>
