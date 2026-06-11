@@ -16,6 +16,7 @@ import { getEarningsCalendar } from './lib/earnings.js';
 import { getAnalystRatings } from './lib/analyst.js';
 import { getFundamentals } from './lib/fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
+import { isFredConfigured } from './lib/fred.js';
 import { startBackups, runBackupNow, listBackups, isBackupName, backupDir } from './lib/backup.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
@@ -109,6 +110,7 @@ app.get('/api/health', (req, res) => {
     integrations: {
       finnhub: Boolean(process.env.FINNHUB_API_KEY),
       eodhd: isEodhdConfigured(),
+      fred: isFredConfigured(),
       ai: {
         primary: process.env.AI_PROVIDER || 'claude',
         fallback: process.env.AI_FALLBACK_PROVIDER || 'gemini',

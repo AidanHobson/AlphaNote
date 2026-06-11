@@ -5,12 +5,14 @@
 const BASE = 'https://api.stlouisfed.org/fred';
 
 // FRED keys are 32-char lowercase alphanumeric — this also rejects placeholders.
+// Trimmed here too (besides env.js) so a pasted trailing newline can never
+// disable the integration.
 export function isFredConfigured() {
-  return /^[a-z0-9]{32}$/.test(process.env.FRED_API_KEY || '');
+  return /^[a-z0-9]{32}$/.test((process.env.FRED_API_KEY || '').trim());
 }
 
 async function fredObs(seriesId, limit) {
-  const key = process.env.FRED_API_KEY || '';
+  const key = (process.env.FRED_API_KEY || '').trim();
   const url = `${BASE}/series/observations?series_id=${seriesId}&api_key=${key}&file_type=json&sort_order=desc&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`FRED ${res.status} for ${seriesId}`);

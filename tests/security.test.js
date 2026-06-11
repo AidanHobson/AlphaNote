@@ -26,3 +26,17 @@ describe('redactSecrets', () => {
     expect(redactSecrets(undefined)).toBe(undefined);
   });
 });
+
+describe('isFredConfigured (whitespace-tolerant key check)', () => {
+  it('accepts a valid key even with a pasted trailing newline/space', async () => {
+    const { isFredConfigured } = await import('../server/lib/fred.js');
+    const saved = process.env.FRED_API_KEY;
+    process.env.FRED_API_KEY = 'synthetic-test-fixture\n';
+    expect(isFredConfigured()).toBe(true);
+    process.env.FRED_API_KEY = '  synthetic-test-fixture ';
+    expect(isFredConfigured()).toBe(true);
+    process.env.FRED_API_KEY = 'not-a-key';
+    expect(isFredConfigured()).toBe(false);
+    process.env.FRED_API_KEY = saved;
+  });
+});
