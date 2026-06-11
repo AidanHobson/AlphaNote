@@ -94,6 +94,12 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many attempts. Please wait 15 minutes and try again.' },
 });
+// Dedicated cap for routes that stream a file off disk (backup download), on top
+// of the global /api limiter — bounds the per-request filesystem read.
+const fileLimiter = rateLimit({
+  windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many download requests — please slow down.' },
+});
 app.use('/api', apiLimiter);
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -226,7 +232,7 @@ app.get('/api/admin/backups', requireAdmin, (req, res) => res.json({ backups: li
 app.post('/api/admin/backups/run', requireAdmin, wrap(async (req, res) => {
   res.json({ ok: true, backups: await runBackupNow() });
 }));
-app.get('/api/admin/backups/:name/download', requireAdmin, (req, res) => {
+app.get('/api/admin/backups/:name/download', requireAdmin, fileLimiter, (req, res) => {
   // Resolve the request against the server-generated backup list and serve the
   // matched entry. The download path is built from the on-disk listing, never
   // from the user-supplied parameter, so traversal is impossible by construction.
