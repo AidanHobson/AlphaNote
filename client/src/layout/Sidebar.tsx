@@ -18,6 +18,7 @@ const NAV = [
     { to: '/earnings', label: 'Earnings', ico: '📅' },
   ]},
   { group: 'Research', items: [
+    { to: '/research', label: 'AI Analyst', ico: '✦' },
     { to: '/notes', label: 'Research Notes', ico: '✎' },
   ]},
 ];

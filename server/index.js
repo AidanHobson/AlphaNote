@@ -8,6 +8,7 @@ import { cached } from './lib/apicache.js';
 
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
 import { generateStockInsight } from './lib/insight.js';
+import { generateResearchNote } from './lib/research.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -350,6 +351,27 @@ app.post('/api/ai/insight', aiLimiter, wrap(async (req, res) => {
     recordError('insight', err, { path: req.path });
     res.status(status).json({
       error: status === 404 ? err.message : 'The AI providers could not generate an insight right now. Please try again.',
+    });
+  }
+}));
+
+// ── AI: full research note (deep-dive analyst persona) ───────────────────────
+app.post('/api/ai/research', aiLimiter, wrap(async (req, res) => {
+  if (!requireFinnhub(res)) return;
+  const symbol = req.body?.symbol;
+  if (!symbol) return res.status(400).json({ error: 'Please provide a stock symbol.' });
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI research unavailable: no AI provider key configured.' });
+  }
+  try {
+    // generateResearchNote caches per symbol for 1h itself; force regenerates.
+    res.json(await generateResearchNote(symbol, { force: req.body?.force === true }));
+  } catch (err) {
+    const status = err.statusCode || 502;
+    console.error('research failed:', err.message);
+    recordError('research', err, { path: req.path });
+    res.status(status).json({
+      error: status === 404 ? err.message : 'The AI providers could not generate a research note right now. Please try again.',
     });
   }
 }));

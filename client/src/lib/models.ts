@@ -101,3 +101,10 @@ export interface Insight {
   symbol: string; provider: string; fellBack: boolean; text: string;
   data: { name: string; price: number; change: number; changePercent: number; currency: string; logo: string };
 }
+export interface ResearchNote {
+  symbol: string; provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;
+  data: {
+    name: string; price: number; change: number; changePercent: number; currency: string; logo: string;
+    hasFundamentals: boolean; hasHistory: boolean; insiderCount: number;
+  };
+}

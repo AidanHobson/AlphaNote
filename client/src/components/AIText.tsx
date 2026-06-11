@@ -23,7 +23,17 @@ export default function AIText({ text }: { text: string }) {
   };
 
   for (const line of lines) {
-    const callout = line.match(/^(bottom line|watch|key takeaway)\s*:\s*(.*)$/i);
+    // Drop horizontal-rule separators some models emit between sections.
+    if (/^[-—_*]{3,}$/.test(line)) continue;
+    // A line that is entirely **Bold** is a section header (research notes).
+    const header = line.match(/^\*\*([^*]+)\*\*$/);
+    if (header) {
+      flush();
+      out.push(<h4 className="ai-section" key={`h-${out.length}`}>{header[1]}</h4>);
+      continue;
+    }
+    // Tolerate a bold-wrapped label: "Bottom line:", "**Bottom line:**", "**Bottom line**:".
+    const callout = line.match(/^(?:\*\*)?(bottom line|watch|key takeaway)\s*:?\s*(?:\*\*)?\s*:?\s*(.*)$/i);
     if (callout) {
       flush();
       out.push(

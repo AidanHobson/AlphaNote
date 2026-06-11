@@ -43,7 +43,7 @@ function getFallbackName(primary) {
 
 // ── Provider implementations ────────────────────────────────────────────────
 
-async function callClaude(prompt, system, config) {
+async function callClaude(prompt, system, config, opts = {}) {
   if (!config.apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
 
   const res = await fetch(`${config.baseUrl}/messages`, {
@@ -55,7 +55,8 @@ async function callClaude(prompt, system, config) {
     },
     body: JSON.stringify({
       model: config.model,
-      max_tokens: 700,
+      // 700 suits the short reads; long-form callers (research notes) raise it.
+      max_tokens: opts.maxTokens || 700,
       // System prompt is marked cacheable (prompt caching) since it's reused
       // across every insight request — cheaper + faster on repeat calls.
       system: system
@@ -100,27 +101,28 @@ async function callGemini(prompt, system, config) {
   return text.trim();
 }
 
-async function callProvider(prompt, system, providerName) {
+async function callProvider(prompt, system, providerName, opts = {}) {
   const config = getProviderConfig(providerName);
   if (config.name === 'gemini') return callGemini(prompt, system, config);
-  return callClaude(prompt, system, config);
+  return callClaude(prompt, system, config, opts);
 }
 
 /**
  * Call the primary provider, falling back automatically on error.
+ * @param {{ maxTokens?: number }} [opts] — raise the output budget for long-form callers.
  * @returns {Promise<{ provider: string, text: string, fellBack: boolean }>}
  */
-export async function callAIWithFallback(prompt, system) {
+export async function callAIWithFallback(prompt, system, opts = {}) {
   const primary = process.env.AI_PROVIDER || 'claude';
   const fallback = getFallbackName(primary);
 
   try {
-    const text = await callProvider(prompt, system, primary);
+    const text = await callProvider(prompt, system, primary, opts);
     return { provider: primary, text, fellBack: false };
   } catch (primaryError) {
     console.warn(`⚠️  ${primary} failed (${primaryError.message}) — falling back to ${fallback}`);
     try {
-      const text = await callProvider(prompt, system, fallback);
+      const text = await callProvider(prompt, system, fallback, opts);
       return { provider: fallback, text, fellBack: true };
     } catch (fallbackError) {
       const err = new Error(
