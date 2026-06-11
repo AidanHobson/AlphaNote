@@ -6,6 +6,7 @@ import { SkeletonLines } from '../components/Skeleton';
 type Status = 'pending' | 'active' | 'disabled';
 interface AdminUser { id: number; username: string; createdAt: number; status: Status; isAdmin: boolean; }
 interface Backup { name: string; bytes: number; createdAt: number; }
+interface ErrEntry { t: number; scope: string; message: string; path?: string; status?: number; }
 
 const fmtBytes = (b: number) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
@@ -23,9 +24,12 @@ export default function Admin() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupErr, setBackupErr] = useState('');
 
+  const [errors, setErrors] = useState<ErrEntry[] | null>(null);
+
   const load = useCallback(() => {
     getJSON<{ users: AdminUser[] }>('/api/admin/users').then((d) => setUsers(d.users)).catch((e) => setError(e.message));
     getJSON<{ backups: Backup[] }>('/api/admin/backups').then((d) => setBackups(d.backups)).catch((e) => setBackupErr(e.message));
+    getJSON<{ errors: ErrEntry[] }>('/api/admin/errors').then((d) => setErrors(d.errors)).catch(() => setErrors([]));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -117,6 +121,30 @@ export default function Admin() {
           )}
           <div style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 10 }}>
             Snapshots live on the server's persistent disk. Download one periodically for an off-site copy — restoring is just replacing the DB file with a snapshot.
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Card title="Recent server errors" sub={errors ? `last ${errors.length} since boot` : ''}>
+          {!errors ? <SkeletonLines lines={3} /> : errors.length === 0 ? (
+            <div className="empty" style={{ border: 'none' }}>No errors recorded since the server started. 🎉</div>
+          ) : (
+            <table className="mtable">
+              <thead><tr><th>When</th><th>Scope</th><th>Message</th></tr></thead>
+              <tbody>
+                {errors.slice(0, 30).map((e, i) => (
+                  <tr key={`${e.t}-${i}`} style={{ cursor: 'default' }}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{new Date(e.t).toLocaleString()}</td>
+                    <td><span className="pill">{e.scope}</span>{e.path && <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5 }}>{e.path}</div>}</td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{e.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 10 }}>
+            In-memory ring buffer (last 100, secrets redacted) — clears on restart/deploy.
           </div>
         </Card>
       </div>

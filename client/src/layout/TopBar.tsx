@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import SearchBar from '../components/SearchBar';
 import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../lib/auth';
@@ -12,10 +13,10 @@ export default function TopBar({ onMenu }: { onMenu: () => void }) {
       <a className="icon-btn" href="https://finnhub.io" target="_blank" rel="noreferrer" title="Market data: Finnhub" aria-label="Market data provider: Finnhub (opens in new tab)">📊</a>
       <ThemeToggle />
       {user && (
-        <span className="user-chip" title={`Signed in as ${user.username}${user.isAdmin ? ' · admin' : ''}`}>
+        <Link to="/account" className="user-chip" title={`Account settings — signed in as ${user.username}${user.isAdmin ? ' · admin' : ''}`}>
           {user.isAdmin && <span className="admin-badge">admin</span>}
           {user.username}
-        </span>
+        </Link>
       )}
       <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => logout()}>⎋</button>
     </div>

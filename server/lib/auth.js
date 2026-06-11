@@ -73,6 +73,24 @@ export function setUserStatus(id, status) {
   return q.setStatus.run(status, id).changes > 0;
 }
 
+// Change password: verify the CURRENT password first (so a hijacked browser
+// session alone can't take over the account), then rotate the hash and revoke
+// every existing session — the caller gets a fresh one.
+const qSetHash = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+const qDeleteUserSessions = db.prepare('DELETE FROM sessions WHERE user_id = ?');
+export async function changePassword(userId, currentPassword, newPassword) {
+  const user = q.userById.get(userId);
+  const row = user ? q.userByName.get(user.username) : null;
+  const ok = await bcrypt.compare(typeof currentPassword === 'string' ? currentPassword : '', row ? row.password_hash : DUMMY_HASH);
+  if (!row || !ok) return false;
+  qSetHash.run(await bcrypt.hash(newPassword, BCRYPT_COST), userId);
+  qDeleteUserSessions.run(userId); // log out everywhere; caller re-issues one session
+  return true;
+}
+export function destroyAllSessions(userId) {
+  return qDeleteUserSessions.run(userId).changes;
+}
+
 // ── sessions ─────────────────────────────────────────────────────────────────
 export function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');

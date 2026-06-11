@@ -300,16 +300,18 @@ async function finalize(txns, source) {
 // (e.g. after a restart) serve the last result instantly instead of doing the
 // multi-second cold scan again.
 let cache = { t: 0, ttl: 0, data: null };
-// In dev, keep it project-relative so every locally-launched process shares one
-// file. On serverless (Vercel/Lambda) the project dir is READ-ONLY, so fall back
-// to the platform's writable temp dir — otherwise writes silently no-op and every
-// cold start redoes the multi-second scan.
+// Cache location, best persistence first:
+//   1. next to DB_PATH when set (Render: the persistent disk → survives deploys)
+//   2. serverless (read-only project dir) → the platform's writable temp dir
+//   3. dev default: project-relative, shared by every locally-launched process
 const IS_SERVERLESS = Boolean(
   process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT,
 );
-const DISK_CACHE = IS_SERVERLESS
-  ? path.join(os.tmpdir(), 'alphanote-insider-cache.json')
-  : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.insider-cache.json');
+const DISK_CACHE = process.env.DB_PATH
+  ? path.join(path.dirname(process.env.DB_PATH), '.insider-cache.json')
+  : IS_SERVERLESS
+    ? path.join(os.tmpdir(), 'alphanote-insider-cache.json')
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.insider-cache.json');
 
 function readDiskCache() {
   try {

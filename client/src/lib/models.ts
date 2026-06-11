@@ -46,6 +46,14 @@ export interface ValMetric {
   spark: number[]; history: { date: string; value: number }[];
 }
 export interface MarketValuation { tab: string; generatedAt: string; metrics: ValMetric[]; }
+export interface SizePeriod { label: string; small: number | null; large: number | null; spread: number | null; }
+export interface SizeBoard {
+  available: boolean; reason?: string; generatedAt?: string; source?: string;
+  small?: { symbol: string; label: string; lastClose: number };
+  large?: { symbol: string; label: string; lastClose: number };
+  periods?: SizePeriod[];
+  ratio?: { date: string; value: number }[];
+}
 export interface HistoryPoint { date: string; close: number; volume: number | null; }
 export interface PriceHistory {
   symbol: string; available: boolean; reason?: string; source?: string;

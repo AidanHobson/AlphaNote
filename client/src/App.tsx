@@ -17,6 +17,7 @@ const Insider = lazy(() => import('./pages/Insider'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Notes = lazy(() => import('./pages/Notes'));
 const Admin = lazy(() => import('./pages/Admin'));
+const Account = lazy(() => import('./pages/Account'));
 
 const router = createBrowserRouter([
   {
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: 'watchlist', element: <Watchlist /> },
       { path: 'notes', element: <Notes /> },
       { path: 'admin', element: <Admin /> },
+      { path: 'account', element: <Account /> },
       { path: '*', element: <Navigate to="/daily-update" replace /> },
     ],
   },

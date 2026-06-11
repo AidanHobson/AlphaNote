@@ -17,7 +17,9 @@ import { getAnalystRatings } from './lib/analyst.js';
 import { getFundamentals } from './lib/fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './lib/eodhd.js';
 import { isFredConfigured } from './lib/fred.js';
+import { getSizeBoard } from './lib/size.js';
 import { startBackups, runBackupNow, listBackups, isBackupName, backupDir } from './lib/backup.js';
+import { recordError, listErrors } from './lib/errlog.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -27,6 +29,7 @@ import {
   validateCredentials, registerUser, verifyLogin, createSession, destroySession,
   attachUser, requireAuth, requireAdmin, isAdminUsername, sessionCookie, clearCookie, isSecureRequest,
   getUserState, putUserState, publicUser, listUsers, setUserStatus,
+  changePassword, destroyAllSessions,
 } from './lib/auth.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -140,6 +143,7 @@ app.post('/api/auth/register', authLimiter, wrap(async (req, res) => {
   } catch (err) {
     if (err.code === 'TAKEN') return res.status(409).json({ error: err.message });
     console.error('register failed:', err.message);
+    recordError('register', err, { path: req.path });
     res.status(500).json({ error: 'Could not create the account right now.' });
   }
 }));
@@ -170,6 +174,24 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+// Change password (verifies the current one; revokes all sessions, re-issues this one).
+app.post('/api/auth/change-password', authLimiter, requireAuth, wrap(async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const invalid = validateCredentials(req.user.username, newPassword);
+  if (invalid) return res.status(400).json({ error: invalid });
+  const ok = await changePassword(req.user.id, currentPassword, newPassword);
+  if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
+  setSession(req, res, req.user.id); // fresh session for this browser
+  res.json({ ok: true, message: 'Password changed. Other sessions were signed out.' });
+}));
+
+// Log out everywhere: revoke every session for this account, including this one.
+app.post('/api/auth/logout-all', requireAuth, (req, res) => {
+  destroyAllSessions(req.user.id);
+  res.setHeader('Set-Cookie', clearCookie());
+  res.json({ ok: true });
+});
+
 // ── Auth gate: everything below requires a valid session ──────────────────────
 app.use('/api', (req, res, next) => {
   if (attachUser(req)) return next();
@@ -195,6 +217,9 @@ app.post('/api/admin/users/:id/disable', requireAdmin, (req, res) => {
   const ok = setUserStatus(Number(req.params.id), 'disabled');
   res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'User not found.' });
 });
+
+// ── Admin: recent server errors (in-app ring buffer, redacted) ────────────────
+app.get('/api/admin/errors', requireAdmin, (req, res) => res.json({ errors: listErrors() }));
 
 // ── Admin: database backups (list / trigger / download a snapshot) ────────────
 app.get('/api/admin/backups', requireAdmin, (req, res) => res.json({ backups: listBackups() }));
@@ -279,6 +304,7 @@ app.get('/api/fundamentals/:symbol', wrap(async (req, res) => {
     res.json(await getFundamentals(req.params.symbol));
   } catch (err) {
     console.error('fundamentals failed:', err.message);
+    recordError('fundamentals', err, { path: req.path });
     res.status(502).json({ error: 'Could not load SEC filings data right now.' });
   }
 }));
@@ -290,6 +316,7 @@ app.get('/api/analyst/:symbol', wrap(async (req, res) => {
     res.json(await getAnalystRatings(req.params.symbol));
   } catch (err) {
     console.error('analyst ratings failed:', err.message);
+    recordError('analyst ratings', err, { path: req.path });
     res.status(502).json({ error: 'Could not load analyst ratings right now.' });
   }
 }));
@@ -307,6 +334,7 @@ app.post('/api/ai/insight', aiLimiter, wrap(async (req, res) => {
   } catch (err) {
     const status = err.statusCode || 502;
     console.error('insight failed:', err.message);
+    recordError('insight', err, { path: req.path });
     res.status(status).json({
       error: status === 404 ? err.message : 'The AI providers could not generate an insight right now. Please try again.',
     });
@@ -329,6 +357,7 @@ app.get('/api/macro/brief', aiLimiter, wrap(async (req, res) => {
     res.json(await cached('brief:macro', 15 * 60_000, generateMacroBrief));
   } catch (err) {
     console.error('macro brief failed:', err.message);
+    recordError('macro brief', err, { path: req.path });
     res.status(502).json({ error: 'Could not generate the macro read right now. Please try again.' });
   }
 }));
@@ -348,6 +377,7 @@ app.get('/api/factors/brief', aiLimiter, wrap(async (req, res) => {
     res.json(await cached('brief:factors', 15 * 60_000, generateFactorBrief));
   } catch (err) {
     console.error('factor brief failed:', err.message);
+    recordError('factor brief', err, { path: req.path });
     res.status(502).json({ error: 'Could not generate the factor read right now. Please try again.' });
   }
 }));
@@ -376,6 +406,7 @@ app.get('/api/economy/brief', aiLimiter, wrap(async (req, res) => {
     res.json(await cached('brief:economy', 15 * 60_000, generateEconomicBrief));
   } catch (err) {
     console.error('economic brief failed:', err.message);
+    recordError('economic brief', err, { path: req.path });
     res.status(502).json({ error: 'Could not generate the economic read right now. Please try again.' });
   }
 }));
@@ -387,6 +418,11 @@ app.get('/api/valuation/market', wrap(async (req, res) => {
 
 app.get('/api/valuation/yields', wrap(async (req, res) => {
   res.json(await getYields());
+}));
+
+// Size lens — small vs large caps from EODHD EOD history (cached 12h).
+app.get('/api/valuation/size', wrap(async (req, res) => {
+  res.json(await getSizeBoard());
 }));
 
 // Macro lenses (Growth / Quality / Leverage) — market-level FRED series per theme.
@@ -411,6 +447,7 @@ app.get('/api/risk/brief', aiLimiter, wrap(async (req, res) => {
     res.json(await cached('brief:risk', 15 * 60_000, generateRiskBrief));
   } catch (err) {
     console.error('risk brief failed:', err.message);
+    recordError('risk brief', err, { path: req.path });
     res.status(502).json({ error: 'Could not generate the risk read right now. Please try again.' });
   }
 }));
@@ -439,6 +476,7 @@ app.get('/api/market/brief', aiLimiter, wrap(async (req, res) => {
     res.json(await cached('brief:market', 15 * 60_000, generateMarketBrief));
   } catch (err) {
     console.error('brief failed:', err.message);
+    recordError('brief', err, { path: req.path });
     res.status(502).json({ error: 'Could not generate the market brief right now. Please try again.' });
   }
 }));
@@ -455,6 +493,7 @@ if (isProd) {
 
 app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err);
+  recordError('unhandled', err, { path: req.path, status: 500 });
   res.status(500).json({ error: 'Something went wrong on our end. Please try again.' });
 });
 

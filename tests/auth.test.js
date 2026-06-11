@@ -68,6 +68,32 @@ describe('register / login / sessions / state', () => {
   }, 20000);
 });
 
+describe('changePassword / destroyAllSessions', () => {
+  it('requires the current password, rotates the hash, and revokes sessions', async () => {
+    const u = await A.registerUser('rotator', 'originalpass1');
+    A.setUserStatus(u.id, 'active');
+    const tok1 = A.createSession(u.id);
+    const tok2 = A.createSession(u.id);
+
+    expect(await A.changePassword(u.id, 'WRONG-current', 'newpassword1')).toBe(false);
+    expect(await A.verifyLogin('rotator', 'originalpass1')).toBeTruthy(); // unchanged
+
+    expect(await A.changePassword(u.id, 'originalpass1', 'newpassword1')).toBe(true);
+    expect(await A.verifyLogin('rotator', 'newpassword1')).toBeTruthy();
+    expect(await A.verifyLogin('rotator', 'originalpass1')).toBeNull();
+    expect(A.userForToken(tok1)).toBeNull(); // all sessions revoked
+    expect(A.userForToken(tok2)).toBeNull();
+  }, 30000);
+
+  it('destroyAllSessions revokes every session for the user', async () => {
+    const u = await A.registerUser('multisess', 'correcthorse9');
+    A.setUserStatus(u.id, 'active');
+    const toks = [A.createSession(u.id), A.createSession(u.id), A.createSession(u.id)];
+    expect(A.destroyAllSessions(u.id)).toBe(3);
+    toks.forEach((t) => expect(A.userForToken(t)).toBeNull());
+  }, 20000);
+});
+
 describe('approval flow', () => {
   it('auto-activates the first user, leaves later sign-ups pending', async () => {
     // alice (registered first, above) was auto-activated:

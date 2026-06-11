@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { getJSON } from '../lib/api';
-import type { MarketValuation, ValMetric } from '../lib/models';
+import type { MarketValuation, ValMetric, SizeBoard } from '../lib/models';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import Skeleton, { SkeletonLines } from '../components/Skeleton';
@@ -40,6 +40,8 @@ export default function Valuation() {
   const [yieldsErr, setYieldsErr] = useState('');
   const [themes, setThemes] = useState<Record<string, MarketValuation>>({});
   const [themeErr, setThemeErr] = useState<Record<string, string>>({});
+  const [size, setSize] = useState<SizeBoard | null>(null);
+  const [sizeErr, setSizeErr] = useState('');
   const [open, setOpen] = useState<{ m: ValMetric; neutral: boolean } | null>(null);
 
   useEffect(() => {
@@ -55,7 +57,10 @@ export default function Valuation() {
         .then((d) => setThemes((s) => ({ ...s, [tab]: d })))
         .catch((e) => setThemeErr((s) => ({ ...s, [tab]: e.message })));
     }
-  }, [tab, yields, yieldsErr, themes, themeErr]);
+    if (tab === 'Size' && !size && !sizeErr) {
+      getJSON<SizeBoard>('/api/valuation/size').then(setSize).catch((e) => setSizeErr(e.message));
+    }
+  }, [tab, yields, yieldsErr, themes, themeErr, size, sizeErr]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
@@ -116,14 +121,57 @@ export default function Valuation() {
           )}
         </div>
       ) : (
-        <Card title="Size — small vs large cap">
-          <div className="empty" style={{ border: 'none' }}>
-            <strong>The size lens needs an index-history feed the free tier lacks</strong>
-            A small-vs-large read needs small-cap index history (Russell 2000 / Wilshire small-cap), which FRED has discontinued and
-            Finnhub gates behind its premium candle API. The <b>Market</b>, <b>Yields</b>, <b>Growth</b>, <b>Quality</b> and <b>Leverage</b> tabs
-            are all live on free public data (Shiller via multpl.com + FRED).
-          </div>
-        </Card>
+        <div>
+          <p style={{ color: 'var(--color-text-secondary)', maxWidth: 760, marginTop: 0 }}>
+            Small caps (Russell 2000 via IWM) vs large caps (S&P 500 via SPY) over the past year — relative performance is the
+            classic risk-appetite and breadth read. Ratio above 100 = small caps leading.
+          </p>
+          {sizeErr && <div className="error-banner">{sizeErr}</div>}
+          {!size && !sizeErr && <Card><SkeletonLines lines={6} /></Card>}
+          {size && !size.available && <Card title="Size — small vs large"><div className="empty" style={{ border: 'none' }}>{size.reason}</div></Card>}
+          {size && size.available && (
+            <div className="grid grid-2">
+              <Card title="Small / large ratio" sub="indexed to 100, 1Y">
+                <Suspense fallback={<Skeleton height={300} />}>
+                  <Chart
+                    height={300}
+                    data={[{
+                      type: 'scatter', mode: 'lines',
+                      x: size.ratio!.map((p) => p.date), y: size.ratio!.map((p) => p.value),
+                      line: { color: cssVar(size.ratio![size.ratio!.length - 1].value >= 100 ? '--color-up' : '--color-down'), width: 1.6 },
+                      hovertemplate: '%{x|%b %d, %Y}: %{y:.1f}<extra></extra>',
+                    }]}
+                    layout={{ margin: { l: 44, r: 12, t: 8, b: 30 }, shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 100, y1: 100, line: { color: cssVar('--color-text-muted'), width: 1, dash: 'dot' } }] }}
+                  />
+                </Suspense>
+                <div style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 6 }}>{size.source}</div>
+              </Card>
+              <Card title="Relative performance" sub="small − large, by period">
+                <table className="mtable">
+                  <thead><tr><th>Period</th><th className="num">{size.small!.symbol}</th><th className="num">{size.large!.symbol}</th><th className="num">Spread</th></tr></thead>
+                  <tbody>
+                    {size.periods!.map((p) => (
+                      <tr key={p.label} style={{ cursor: 'default' }}>
+                        <td>{p.label}</td>
+                        <td className="num">{p.small != null ? `${p.small >= 0 ? '+' : ''}${p.small}%` : '—'}</td>
+                        <td className="num">{p.large != null ? `${p.large >= 0 ? '+' : ''}${p.large}%` : '—'}</td>
+                        <td className="num">
+                          {p.spread != null ? (
+                            <span className={`badge ${p.spread >= 0 ? 'up' : 'down'}`}>{p.spread >= 0 ? '▲' : '▼'} {p.spread >= 0 ? '+' : ''}{p.spread}pp</span>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ color: 'var(--color-text-secondary)', fontSize: 12.5, marginTop: 10, lineHeight: 1.5 }}>
+                  Positive spread = small caps outperforming (typically a risk-on, broadening market); persistent negative
+                  spread = narrow, large-cap-led leadership.
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
       )}
 
       {open && <ValModal m={open.m} neutral={open.neutral} onClose={() => setOpen(null)} />}
