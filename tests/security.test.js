@@ -1,28 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { redactSecrets } from '../server/lib/valuation.js';
 
-const HEX_CHUNK = '01234567';
-const makeHex = (length) => HEX_CHUNK.repeat(Math.ceil(length / HEX_CHUNK.length)).slice(0, length);
-const providerKeyPrefix = ['sk', 'test', 'EXAMPLE'].join('-');
-const fakeProviderKey = `${providerKeyPrefix}${'0123456789'}_notreal`;
+const makeFredKey = () => '01234567'.repeat(4);
 
 describe('redactSecrets', () => {
+  // NB: all fixtures below are synthetic, key-SHAPED strings — never real keys.
   it('scrubs api_key/token query parameters', () => {
-    const fakeKey = makeHex(32);
+    const fakeKey = makeFredKey();
     const msg = `api.stlouisfed.org/fred/series/observations?series_id=GS10&api_key=${fakeKey}&file_type=json → 429`;
     const out = redactSecrets(msg);
-
     expect(out).not.toContain(fakeKey);
     expect(out).toContain('api_key=REDACTED');
-    expect(out).toContain('429');
+    expect(out).toContain('429'); // keeps the useful status
   });
 
   it('scrubs sk- style provider keys', () => {
-    expect(redactSecrets(`failed with key ${fakeProviderKey}`)).not.toContain(providerKeyPrefix);
+    const prefix = ['sk', 'test', 'EXAMPLE'].join('-');
+    const fakeKey = `${prefix}${'0123456789'}_notreal`;
+
+    expect(redactSecrets(`failed with key ${fakeKey}`)).not.toContain(prefix);
   });
 
   it('scrubs long hex tokens even without a query param', () => {
-    const fakeToken = makeHex(64);
+    const fakeToken = makeFredKey() + makeFredKey();
     expect(redactSecrets(`token ${fakeToken} here`)).toContain('REDACTED');
   });
 
@@ -38,10 +38,10 @@ describe('isFredConfigured (whitespace-tolerant key check)', () => {
     const saved = process.env.FRED_API_KEY;
 
     try {
-      process.env.FRED_API_KEY = `${makeHex(32)}\n`;
+      process.env.FRED_API_KEY = `${makeFredKey()}\n`;
       expect(isFredConfigured()).toBe(true);
 
-      process.env.FRED_API_KEY = `  ${makeHex(32)} `;
+      process.env.FRED_API_KEY = `  ${makeFredKey()} `;
       expect(isFredConfigured()).toBe(true);
 
       process.env.FRED_API_KEY = 'not-a-key';
