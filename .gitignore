@@ -26,3 +26,8 @@ db-backups/
 
 # local editor / preview tooling
 .claude/
+
+# local scan reports
+findings.json
+results.sarif
+*.sarif

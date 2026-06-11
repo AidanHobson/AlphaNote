@@ -228,10 +228,15 @@ app.post('/api/admin/backups/run', requireAdmin, wrap(async (req, res) => {
   res.json({ ok: true, backups: await runBackupNow() });
 }));
 app.get('/api/admin/backups/:name/download', requireAdmin, (req, res) => {
-  const { name } = req.params;
-  // strict allowlist of the generated filename shape — no traversal possible
+  // Defense in depth: strip any path components, allowlist the exact filename
+  // shape, then verify the resolved path stays inside the backup directory.
+  const name = path.basename(String(req.params.name || ''));
   if (!isBackupName(name)) return res.status(400).json({ error: 'Invalid backup name.' });
-  const file = path.join(backupDir(), name);
+  const dir = path.resolve(backupDir());
+  const file = path.resolve(dir, name);
+  if (file !== path.join(dir, name) || !file.startsWith(dir + path.sep)) {
+    return res.status(400).json({ error: 'Invalid backup name.' });
+  }
   if (!fs.existsSync(file)) return res.status(404).json({ error: 'Backup not found.' });
   res.download(file);
 });
@@ -495,7 +500,8 @@ if (isProd) {
   const dist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(dist));
   // SPA fallback: any non-API route returns index.html (client-side routing).
-  app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')));
+  // Rate-limited so the per-request file read can't be hammered.
+  app.get('*', apiLimiter, (req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
 
 app.use((err, req, res, _next) => {

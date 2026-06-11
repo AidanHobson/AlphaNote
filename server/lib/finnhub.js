@@ -65,6 +65,9 @@ export async function getCompanyProfile(symbol) {
 // Concurrency-limited so large baskets don't burst Finnhub's free-tier rate limit.
 export async function getWatchlistData(symbols) {
   if (!symbols || symbols.length === 0) return [];
+  // Hard cap the basket size (callers already slice, but bound it here too so the
+  // worker loop can never iterate over an unbounded user-supplied list).
+  symbols = symbols.slice(0, 100);
   const out = new Array(symbols.length);
   let i = 0;
   const worker = async () => {
