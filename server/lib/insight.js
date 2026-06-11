@@ -1,28 +1,42 @@
-// Builds an AI "insight" for a single stock from live Finnhub data.
-// Tone mirrors the original OpenStock email prompts: plain English, accessible,
-// grounded in the data provided, ending with a "Bottom line".
+// Builds an AI "insight" for a single stock — AlphaNote's senior equity research
+// analyst voice: evidence-led, quantified, facts separated from interpretation,
+// grounded in ONLY the data provided (quote, news, ratings, EDGAR fundamentals).
 
 import { getQuote, getCompanyProfile, getNews } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { getAnalystRatings } from './analyst.js';
+import { getFundamentals } from './fundamentals.js';
 import { formatMarketCapValue } from './utils.js';
 
-const SYSTEM_PROMPT = `You are a concise, plain-English market explainer for OpenStock, an open-source stock app.
-You help everyday investors quickly understand a stock using ONLY the data you are given.
+export const SYSTEM_PROMPT = `You are AlphaNote's senior equity research analyst. You write tight, evidence-led stock briefs for a markets-research dashboard, using ONLY the data provided.
 
-Rules:
-- Use simple, accessible language. Avoid jargon; when you must use a term, explain it briefly.
-- Be specific: reference the actual numbers provided (price, % change, market cap, news).
-- NEVER invent data, price targets, earnings figures, or facts not present in the input.
-- Do NOT give buy/sell/hold recommendations or financial advice.
-- Keep it tight. No preamble, no markdown headings, no code fences.
+Standards:
+- Senior buy-side voice: precise, quantified, no padding and no hype. Plain language over jargon; briefly explain any term a generalist would not know.
+- Separate facts from interpretation. Every claim must trace to a number or headline in the input; frame implications as "suggests" or "implies", never as certainty.
+- Focus on what actually matters: the one or two drivers material enough to move the investment case, not a laundry list.
+- NEVER invent data — no price targets, estimates, or figures that are not in the input. If something important is missing (e.g. no fundamentals), say so plainly.
+- Do NOT give buy/sell/hold recommendations, position sizing, or personalised financial advice.
+- Plain text only: no markdown headings, no code fences.
 
-Respond in exactly this structure (plain text):
-1) One short summary sentence about how the stock is doing today.
-2) 3 bullet points (each starting with "- ") covering price action, the company/sector, and what the recent news suggests.
-3) A final line starting with "Bottom line:" — one sentence a beginner can act on for their own research (not advice).`;
+Respond in exactly this structure:
+1) One sentence: what the stock is doing today and the single most important thing in the data.
+2) 3-4 bullet points (each starting with "- "):
+   - Price action in context (the day's move vs its range, and what it suggests).
+   - Fundamentals: the one or two line items or ratios that drive this name (growth, margins, cash conversion, leverage). If operating cash flow diverges materially from net income, flag it as an earnings-quality question.
+   - Sentiment and positioning: what the analyst consensus and news flow imply the market already expects.
+   - The key risk visible in the data (only if one is actually visible).
+3) A final line starting with "Bottom line:" — one sentence on what a researcher should dig into next (research direction, not advice).`;
 
-function buildPrompt({ symbol, quote, profile, news, ratings }) {
+// Compact dollar formatting for prompt lines ($12.00B style); EPS stays raw.
+// formatMarketCapValue rejects non-positive values, so carry the sign ourselves
+// (net income/OCF can be negative for loss-making companies).
+const fmtUsd = (v) => {
+  if (v == null) return null;
+  const sign = v < 0 ? '-' : '';
+  return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `$${v}`;
+};
+
+export function buildPrompt({ symbol, quote, profile, news, ratings, fundamentals }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -42,6 +56,25 @@ function buildPrompt({ symbol, quote, profile, news, ratings }) {
     lines.push(`- Open: ${quote.o}, Previous close: ${quote.pc}`);
   }
 
+  if (fundamentals?.available) {
+    const item = (key) => fundamentals.lineItems.find((li) => li.key === key)?.current;
+    const rev = item('revenue');
+    const ni = item('netIncome');
+    const ocf = item('operatingCashFlow');
+    const eps = item('eps');
+    lines.push('');
+    lines.push(`Fundamentals (${fundamentals.source}; basis as labelled, through ${fundamentals.currentThrough || fundamentals.asOfFY}):`);
+    if (rev?.value != null) lines.push(`- Revenue: ${fmtUsd(rev.value)} (${rev.basis})`);
+    if (ni?.value != null) lines.push(`- Net income: ${fmtUsd(ni.value)} (${ni.basis})`);
+    if (ocf?.value != null) lines.push(`- Operating cash flow: ${fmtUsd(ocf.value)} (${ocf.basis})`);
+    if (ocf?.value != null && ni?.value) lines.push(`- OCF / net income: ${(ocf.value / ni.value).toFixed(2)}x (cash conversion; healthy is roughly above 0.8x)`);
+    if (eps?.value != null) lines.push(`- Diluted EPS: ${eps.value} (${eps.basis})`);
+    for (const r of fundamentals.ratios) lines.push(`- ${r.label}: ${r.value}${r.unit === '%' ? '%' : r.unit === 'x' ? 'x' : ''}`);
+  } else {
+    lines.push('');
+    lines.push('Fundamentals: not available for this listing (no SEC XBRL filings — likely a non-US filer, ETF, or crypto proxy).');
+  }
+
   if (news && news.length) {
     lines.push('');
     lines.push('Recent headlines:');
@@ -58,7 +91,7 @@ function buildPrompt({ symbol, quote, profile, news, ratings }) {
   }
 
   lines.push('');
-  lines.push('Write the insight now using ONLY the data above.');
+  lines.push('Write the brief now using ONLY the data above.');
   return lines.join('\n');
 }
 
@@ -67,11 +100,12 @@ export async function generateStockInsight(symbol) {
   if (!sym) throw new Error('A stock symbol is required');
 
   // Gather context (each call is individually fault-tolerant).
-  const [quote, profile, news, ratings] = await Promise.all([
+  const [quote, profile, news, ratings, fundamentals] = await Promise.all([
     getQuote(sym),
     getCompanyProfile(sym),
     getNews([sym]).catch(() => []),
     getAnalystRatings(sym).catch(() => null),
+    getFundamentals(sym).catch(() => null),
   ]);
 
   if (!quote || quote.c == null || quote.c === 0) {
@@ -81,7 +115,7 @@ export async function generateStockInsight(symbol) {
     throw err;
   }
 
-  const prompt = buildPrompt({ symbol: sym, quote, profile, news, ratings });
+  const prompt = buildPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals });
   const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT);
 
   return {
