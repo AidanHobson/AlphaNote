@@ -13,6 +13,7 @@ import { generateOutlook } from './lib/outlook.js';
 import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { getMarketPredictions } from './lib/predictions.js';
 import { generateThemeRadar } from './lib/radar.js';
+import { generateMonopolyNote, generateMonopolyRadar } from './lib/monopoly.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -321,6 +322,36 @@ app.get('/api/social/buzz', wrap(async (req, res) => {
 // Polymarket crowd odds on macro/market events (keyless, 1h cache).
 app.get('/api/social/predictions', wrap(async (req, res) => {
   res.json(await getMarketPredictions());
+}));
+
+// Monopoly research: per-ticker structural-monopoly profile + discovery radar.
+app.post('/api/ai/monopoly', aiLimiter, wrap(async (req, res) => {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI research unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await generateMonopolyNote(req.body?.topic, { force: req.body?.force === true }));
+  } catch (err) {
+    const status = err.statusCode || 502;
+    console.error('monopoly failed:', err.message);
+    recordError('monopoly', err, { path: req.path });
+    res.status(status).json({
+      error: [400, 404].includes(status) ? err.message : 'The AI providers could not generate the monopoly profile right now. Please try again.',
+    });
+  }
+}));
+
+app.post('/api/ai/monopoly-radar', aiLimiter, wrap(async (req, res) => {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI radar unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await generateMonopolyRadar({ force: req.body?.force === true }));
+  } catch (err) {
+    console.error('monopoly-radar failed:', err.message);
+    recordError('monopoly-radar', err, { path: req.path });
+    res.status(502).json({ error: 'The AI providers could not generate the monopoly radar right now. Please try again.' });
+  }
 }));
 
 // Theme Radar: emerging, not-yet-named speculative themes mined from the live

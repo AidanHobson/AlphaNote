@@ -27,6 +27,16 @@ describe('createBucket', () => {
     await expect(b.take()).rejects.toThrow(/queue timeout/);
   });
 
+  it('per-call patience: a fail-fast waiter times out while a patient one survives', async () => {
+    // refill every 200ms; burst spent → both waiters queue behind one refill
+    const b = createBucket({ perMinute: 300, burst: 1, maxWaitMs: 2000 });
+    await b.take();
+    const fast = b.take(50);    // bulk-style: gives up before the refill
+    const patient = b.take();   // default patience: outlives it
+    await expect(fast).rejects.toThrow(/timeout after 50ms/);
+    await expect(patient).resolves.toBeUndefined();
+  });
+
   it('serves queued waiters in FIFO order', async () => {
     const b = createBucket({ perMinute: 1200, burst: 1, maxWaitMs: 2000 }); // refill every 50ms
     await b.take();

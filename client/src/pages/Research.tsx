@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from 'react';
 import { getJSON, postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote } from '../lib/models';
+import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote, MonopolyNote, MonopolyRadarNote } from '../lib/models';
 import AIText from '../components/AIText';
 import Tabs from '../components/Tabs';
 import { SkeletonLines } from '../components/Skeleton';
@@ -8,22 +8,30 @@ import BuzzBoardCard from '../components/BuzzBoardCard';
 import PredictionsCard from '../components/PredictionsCard';
 import RetailPulsePanel from '../components/RetailPulsePanel';
 import ThemeRadarPanel from '../components/ThemeRadarPanel';
+import MonopolyRadarPanel from '../components/MonopolyRadarPanel';
 import { onStorageChange } from '../lib/storage';
 import { providerLabel } from '../lib/format';
 
-const MODES = ['Deep research', 'Speculative outlook'];
+const MODES = ['Deep research', 'Speculative outlook', 'Monopoly research'];
 const RESEARCH_PILLS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'XOM'];
 const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'AI Bottlenecks', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
+// Seed universe from the monopoly mandate: known anchors + smaller names to verify.
+const MONOPOLY_PILLS = ['ASML', 'MCO', 'VEEV', 'TYL', 'TDG', 'ATEX', 'PLPC', 'CLFD'];
 
 const sanitizeTopic = (t: string) => t.replace(/[^A-Za-z0-9 .&\-/+']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 
 export default function Research() {
   const [mode, setMode] = useState(MODES[0]);
   const isOutlook = mode === MODES[1];
+  const isMonopoly = mode === MODES[2];
 
   const [input, setInput] = useState('');
   const [note, setNote] = useState<ResearchNote | null>(null);
   const [outlook, setOutlook] = useState<OutlookNote | null>(null);
+  const [monopoly, setMonopoly] = useState<MonopolyNote | null>(null);
+  const [monoRadar, setMonoRadar] = useState<MonopolyRadarNote | null>(null);
+  const [monoRadarBusy, setMonoRadarBusy] = useState(false);
+  const [monoRadarError, setMonoRadarError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,7 +58,13 @@ export default function Research() {
     if (!topic || loading) return;
     setLoading(true); setError('');
     setInput(topic);
-    if (isOutlook) {
+    if (isMonopoly) {
+      if (!force) setMonopoly(null);
+      postJSON<MonopolyNote>('/api/ai/monopoly', { topic: topic.toUpperCase(), force })
+        .then(setMonopoly)
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    } else if (isOutlook) {
       if (!force) setOutlook(null);
       postJSON<OutlookNote>('/api/ai/outlook', { topic, force })
         .then(setOutlook)
@@ -94,15 +108,26 @@ export default function Research() {
       .finally(() => setRadarBusy(false));
   };
 
-  const pills = isOutlook ? OUTLOOK_PILLS : RESEARCH_PILLS;
-  const active = isOutlook ? outlook : note;
+  const runMonoRadar = (force = false) => {
+    if (monoRadarBusy) return;
+    setMonoRadarBusy(true); setMonoRadarError('');
+    postJSON<MonopolyRadarNote>('/api/ai/monopoly-radar', { force })
+      .then(setMonoRadar)
+      .catch((e) => setMonoRadarError(e.message))
+      .finally(() => setMonoRadarBusy(false));
+  };
+
+  const pills = isMonopoly ? MONOPOLY_PILLS : isOutlook ? OUTLOOK_PILLS : RESEARCH_PILLS;
+  const active = isMonopoly ? monopoly : isOutlook ? outlook : note;
 
   return (
     <div>
       <div className="page-head">
         <h1>AI Analyst</h1>
         <p>
-          {isOutlook
+          {isMonopoly
+            ? 'Structural monopolists and near-monopolists in niche, critical, or emerging markets — across all cap tiers, sub-$5B explicitly included. Profiles classify the moat against six archetypes (technical, spectrum/regulatory, network/data, chokepoint, certification, niche industrial), run EPIC/FaVeS, and weigh bull/base/bear scenarios. The radar hunts for under-followed names.'
+            : isOutlook
             ? 'Speculative outlooks on themes (Photonics, Robotics, Energy…) or single stocks — the forward-looking counterpart to the evidence-led research notes. Every theme maps its picks-and-shovels layer: the toolmakers and suppliers that get paid whichever player wins. Blends live data with the model’s general knowledge; speculation is labelled as such.'
             : 'Full research note on any US-listed stock — fundamentals trajectory and earnings quality from SEC filings, derived valuation multiples, price action vs SPY, analyst consensus, news flow, 13F positioning, and insider activity, synthesised into an evidence-led view.'}
         </p>
@@ -118,13 +143,13 @@ export default function Research() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={isOutlook ? 'Theme or ticker, e.g. Photonics' : 'Enter a ticker, e.g. AAPL'}
+          placeholder={isMonopoly ? 'Ticker, e.g. ATEX' : isOutlook ? 'Theme or ticker, e.g. Photonics' : 'Enter a ticker, e.g. AAPL'}
           maxLength={isOutlook ? 60 : 12}
           style={isOutlook ? { textTransform: 'none' } : undefined}
           aria-label={isOutlook ? 'Theme or ticker' : 'Ticker symbol'}
         />
         <button className="btn primary" type="submit" disabled={loading || !input.trim()}>
-          {loading ? 'Working…' : isOutlook ? 'Outlook' : 'Research'}
+          {loading ? 'Working…' : isMonopoly ? 'Profile' : isOutlook ? 'Outlook' : 'Research'}
         </button>
       </form>
 
@@ -132,7 +157,7 @@ export default function Research() {
         {pills.map((s) => (
           <button
             key={s}
-            className={`mgr-pill ${(isOutlook ? outlook?.topic === s : note?.symbol === s) ? 'active' : ''}`}
+            className={`mgr-pill ${(isMonopoly ? monopoly?.topic === s : isOutlook ? outlook?.topic === s : note?.symbol === s) ? 'active' : ''}`}
             disabled={loading}
             onClick={() => run(s)}
           >
@@ -145,7 +170,7 @@ export default function Research() {
 
       {loading && !active && (
         <div className="ai-panel">
-          <div className="ai-head"><span className="spark">✦</span><h3>{isOutlook ? 'Drafting speculative outlook…' : 'Drafting research note…'}</h3></div>
+          <div className="ai-head"><span className="spark">✦</span><h3>{isMonopoly ? 'Drafting monopoly profile…' : isOutlook ? 'Drafting speculative outlook…' : 'Drafting research note…'}</h3></div>
           <div className="ai-body"><SkeletonLines lines={12} /></div>
         </div>
       )}
@@ -216,7 +241,54 @@ export default function Research() {
         </div>
       )}
 
-      {!active && !loading && !error && !isOutlook && (
+      {isMonopoly && monopoly && (
+        <div className="ai-panel">
+          <div className="ai-head">
+            {monopoly.data.logo
+              ? <img src={monopoly.data.logo} alt="" style={{ width: 24, height: 24, borderRadius: 7 }} />
+              : <span className="spark">♛</span>}
+            <h3>{monopoly.data.name} ({monopoly.topic})</h3>
+            <span className="badge flat">MONOPOLY PROFILE</span>
+            {monopoly.data.price != null && (
+              <span className={`badge ${(monopoly.data.change ?? 0) >= 0 ? 'up' : 'down'}`}>
+                {monopoly.data.price} {monopoly.data.currency} · {monopoly.data.changePercent != null ? monopoly.data.changePercent.toFixed(2) : '0.00'}%
+              </span>
+            )}
+            <span className="pill accent" style={{ marginLeft: 'auto' }}>{providerLabel(monopoly.provider)}</span>
+            <button className="icon-btn" style={{ width: 30, height: 30, marginLeft: 8 }} title="Regenerate (bypasses the 1h cache)"
+              onClick={() => run(monopoly.topic, true)} disabled={loading}>↻</button>
+          </div>
+          <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
+            <AIText text={monopoly.text} />
+          </div>
+          <div className="ai-foot">
+            Speculative monopoly research · {providerLabel(monopoly.provider)}{monopoly.fellBack ? ' (primary unavailable)' : ''}
+            {' · '}live data{monopoly.data.hasFundamentals ? ': SEC EDGAR fundamentals' : ''}{monopoly.data.hasValuation ? ', derived multiples' : ''}
+            {monopoly.data.shortVol ? `, short vol ${monopoly.data.shortVol.ratio}%` : ''}
+            {(monopoly.data.insiderCount ?? 0) > 0 ? `, ${monopoly.data.insiderCount} insider filing${(monopoly.data.insiderCount ?? 0) > 1 ? 's' : ''}` : ''}
+            {(monopoly.data.managers13F ?? 0) > 0 ? `, ${monopoly.data.managers13F} 13F holder${(monopoly.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}
+            {' · '}moat claims blend labelled general knowledge (training cutoff) — verify before acting
+            {' · '}generated {new Date(monopoly.generatedAt).toLocaleTimeString()}{monopoly.cached ? ' (cached)' : ''}
+            {' · '}not investment advice
+          </div>
+        </div>
+      )}
+
+      {isMonopoly && (
+        <>
+          {monoRadarError && <div className="error-banner" style={{ marginTop: 16 }}>{monoRadarError}</div>}
+          <MonopolyRadarPanel radar={monoRadar} busy={monoRadarBusy} disabled={loading}
+            onRegen={() => runMonoRadar(true)} onProfile={(t) => run(t)} />
+          {!monoRadar && !monoRadarBusy && (
+            <div className={active || loading ? '' : 'empty'} style={{ marginTop: 16, textAlign: 'center' }}>
+              {!active && !loading && <p style={{ marginTop: 0 }}>Pick a seed ticker above for a full monopoly profile, or scan for under-followed names.</p>}
+              <button className="btn primary" onClick={() => runMonoRadar()}>🔭 Run Monopoly Radar</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {!active && !loading && !error && !isOutlook && !isMonopoly && (
         <div className="empty">
           Pick a ticker above to generate an institutional-style research note.
         </div>

@@ -25,7 +25,7 @@ export function createBucket({ perMinute = 54, burst = 6, maxWaitMs = 15_000 } =
     // waiter's deadline (so slow buckets still reject timed-out waiters promptly).
     const refillDelay = Math.max(refillMs / 2, 25);
     const expiryDelay = queue.length
-      ? Math.max(queue[0].queuedAt + maxWaitMs - Date.now(), 25)
+      ? Math.max(Math.min(...queue.map((w) => w.deadline)) - Date.now(), 25)
       : refillDelay;
     timer = setTimeout(() => { timer = null; drain(); }, Math.min(refillDelay, expiryDelay));
     timer.unref?.(); // never keep the process alive just for the queue
@@ -33,26 +33,33 @@ export function createBucket({ perMinute = 54, burst = 6, maxWaitMs = 15_000 } =
 
   const drain = () => {
     refill();
+    // Expire first so a timed-out bulk waiter never consumes a token a more
+    // patient interactive waiter could use (each waiter has its own deadline).
+    const now = Date.now();
+    for (let i = queue.length - 1; i >= 0; i--) {
+      if (now >= queue[i].deadline) {
+        const w = queue.splice(i, 1)[0];
+        w.reject(new Error(`rate-limit queue timeout after ${w.deadline - w.queuedAt}ms`));
+      }
+    }
     while (queue.length && tokens > 0) {
       tokens -= 1;
       queue.shift().resolve();
-    }
-    const now = Date.now();
-    while (queue.length && now - queue[0].queuedAt >= maxWaitMs) {
-      queue.shift().reject(new Error(`rate-limit queue timeout after ${maxWaitMs}ms`));
     }
     if (queue.length) schedule();
   };
 
   return {
-    take() {
+    // patienceMs: per-call wait budget — bulk basket fetches pass a short one
+    // (fail fast, don't clog the queue); interactive singles use the default.
+    take(patienceMs = maxWaitMs) {
       refill();
       if (tokens > 0) {
         tokens -= 1;
         return Promise.resolve();
       }
       return new Promise((resolve, reject) => {
-        queue.push({ resolve, reject, queuedAt: Date.now() });
+        queue.push({ resolve, reject, queuedAt: Date.now(), deadline: Date.now() + patienceMs });
         schedule();
       });
     },

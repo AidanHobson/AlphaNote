@@ -126,6 +126,19 @@ export interface BuzzBoard {
 export interface BuzzBrief {
   provider: string; fellBack: boolean; text: string; generatedAt: string; boardGeneratedAt: string; cached: boolean;
 }
+export interface MonopolyNote {
+  topic: string; kind: 'monopoly'; speculative: true;
+  provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;
+  data: {
+    name: string; price?: number; change?: number; changePercent?: number; currency?: string; logo?: string;
+    hasFundamentals?: boolean; hasValuation?: boolean;
+    shortVol?: { ratio: number; date: string }; insiderCount?: number; managers13F?: number;
+  };
+}
+export interface MonopolyRadarNote {
+  kind: 'monopoly-radar'; speculative: true;
+  provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;
+}
 export interface ThemeRadarNote {
   provider: string; fellBack: boolean; text: string; speculative: true; generatedAt: string; cached: boolean;
   signal: { hnStories: number; redditThreads: number; predictionEvents: number };

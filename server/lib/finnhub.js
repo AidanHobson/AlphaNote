@@ -33,8 +33,8 @@ const bucket = createBucket({
   maxWaitMs: 15_000,
 });
 
-async function fetchJSON(url) {
-  await bucket.take();
+async function fetchJSON(url, { patienceMs } = {}) {
+  await bucket.take(patienceMs);
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -42,6 +42,10 @@ async function fetchJSON(url) {
   }
   return res.json();
 }
+
+// Bulk basket fetches (watchlist/movers) fail fast instead of clogging the
+// queue for 15s per call — single interactive calls keep the default patience.
+const BULK_PATIENCE_MS = 2500;
 
 function getExchangeLabel(symbol, exchange) {
   if (exchange && exchange.trim()) return exchange.trim();
@@ -51,10 +55,10 @@ function getExchangeLabel(symbol, exchange) {
   return FINNHUB_EXCHANGE_SUFFIXES.has(suffix) ? suffix : 'US';
 }
 
-export async function getQuote(symbol) {
+export async function getQuote(symbol, { patienceMs } = {}) {
   try {
     const url = `${BASE_URL}/quote?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
-    return await cached(`quote:${symbol}`, 10, () => fetchJSON(url));
+    return await cached(`quote:${symbol}`, 10, () => fetchJSON(url, { patienceMs }));
   } catch (e) {
     console.error('Error fetching quote for', symbol, e.message);
     return null;
@@ -83,10 +87,10 @@ export async function getNextEarnings(symbol) {
   }
 }
 
-export async function getCompanyProfile(symbol) {
+export async function getCompanyProfile(symbol, { patienceMs } = {}) {
   try {
     const url = `${BASE_URL}/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
-    return await cached(`profile:${symbol}`, 86400, () => fetchJSON(url));
+    return await cached(`profile:${symbol}`, 86400, () => fetchJSON(url, { patienceMs }));
   } catch (e) {
     console.error('Error fetching profile for', symbol, e.message);
     return null;
@@ -106,7 +110,10 @@ export async function getWatchlistData(symbols) {
     while (i < count) {
       const idx = i++;
       const sym = symbols[idx];
-      const [quote, profile] = await Promise.all([getQuote(sym), getCompanyProfile(sym)]);
+      const [quote, profile] = await Promise.all([
+        getQuote(sym, { patienceMs: BULK_PATIENCE_MS }),
+        getCompanyProfile(sym, { patienceMs: BULK_PATIENCE_MS }),
+      ]);
       out[idx] = {
         symbol: sym,
         price: quote?.c || 0,
