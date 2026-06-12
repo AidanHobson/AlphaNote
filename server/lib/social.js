@@ -126,9 +126,10 @@ export async function fetchText(url, { timeout = 9000 } = {}) {
   }
 }
 
-const decodeEntities = (s) => String(s)
-  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-  .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
+// Single-pass entity decoding via callback — never decodes `&amp;` before the
+// other entities (the classic double-unescaping hazard, CodeQL js/double-escaping).
+const ENTITY_MAP = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", '#039': "'" };
+const decodeEntities = (s) => String(s).replace(/&(amp|lt|gt|quot|apos|#0?39);/g, (match, name) => ENTITY_MAP[name] ?? match);
 const postIdFrom = (url) => /\/comments\/([a-z0-9]+)/i.exec(String(url))?.[1] || null;
 
 // Atom entries from /search.rss — only real posts (links containing /comments/).
@@ -183,8 +184,11 @@ export function parseShredditListing(html) {
 export function parsePostRssBody(xml) {
   const m = /<content type="html">([\s\S]*?)<\/content>/.exec(String(xml));
   if (!m) return '';
-  // Content is entity-encoded HTML (often doubly) — decode, strip tags, tidy.
-  let text = decodeEntities(decodeEntities(m[1]));
+  // Reddit double-encodes the content HTML. Unwrap ONLY the outer encoding
+  // layer explicitly (&amp;lt; → &lt;), then decode once — never blanket-
+  // unescape the same string twice (CodeQL js/double-escaping).
+  const unwrapped = m[1].replace(/&amp;(#?\w+;)/g, '&$1');
+  let text = decodeEntities(unwrapped);
   text = text.replace(/<[^>]+>/g, ' ').replace(/&#\d+;/g, ' ').replace(/\s+/g, ' ').trim();
   return text.replace(/submitted by\s+\/u\/\S+.*$/i, '').trim();
 }
