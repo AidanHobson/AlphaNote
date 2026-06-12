@@ -9,6 +9,7 @@ import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { computeValuation } from './research.js';
 import { getSocialPulse, socialPulseToLines, getPostBody } from './social.js';
+import { marketSnippetLines } from './websearch.js';
 import { getRedditBuzz } from './buzz.js';
 import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
@@ -36,7 +37,7 @@ Two or three sentences: what it is, and why it could matter to public-market inv
 What has changed recently (technology, cost curves, policy, demand) that puts this theme on the clock — and how confident you are in each driver. When a "Last 30 days" social/forum signal is provided, use it to ground what is actually being discussed right now (and note where current attention diverges from your prior knowledge).
 
 **Market size & trajectory**
-The market today and how it is expected to expand: rough current size, the commonly projected growth path, and — more importantly — WHAT drives that expansion (adoption curves, regulation, cost declines, replacement cycles) and what would stall it. Every figure is a labelled estimate with its vintage ("on the order of $X bn as of [year], commonly projected ~Y% CAGR — verify current forecasts"); distinguish consensus projections from your own speculation about where growth could surprise.
+The market today and how it is expected to expand: rough current size, the commonly projected growth path, and — more importantly — WHAT drives that expansion (adoption curves, regulation, cost declines, replacement cycles) and what would stall it. When live web snippets are provided, build this section on THEM — cite figures with their source domain, and present the range when sources disagree. Without snippets, figures are labelled estimates with vintage ("on the order of $X bn as of [year] — verify current forecasts"). Either way, distinguish sourced projections from your own speculation about where growth could surprise.
 
 **Value chain**
 Bullets mapping the sub-segments (e.g. components → systems → applications) and where the economic leverage likely sits.
@@ -79,7 +80,7 @@ Write the outlook in exactly this structure:
 Open with two or three sentences on what the company actually DOES — its products, who buys them, and how it makes money (general knowledge, labelled; do not assume the reader knows the name). Then anchor to the live data: where the stock and valuation stand today. Classify the business: is this a picks-and-shovels enabler (it sells the tools, tests, equipment, or infrastructure an industry needs, and gets paid whichever player wins — e.g. Technoprobe in semiconductor test, Aehr in wafer-level test) or an end-market bet on a winner? Let that classification shape the rest of the note: enablers trade winner-picking risk for capex cyclicality and customer concentration.
 
 **The market**
-The end market(s) this company sells into and how they are expected to expand: rough size today and the commonly projected growth, with what drives it and what could stall it. Figures are labelled estimates with vintage ("on the order of $X bn as of [year] — verify"); distinguish consensus projections from your own view of where growth could surprise. If the company's growth depends on a market that does not exist yet, say so plainly.
+The end market(s) this company sells into and how they are expected to expand: rough size today and the commonly projected growth, with what drives it and what could stall it. When live web snippets are provided, build on them and cite figures with their source domain (present ranges where sources disagree); otherwise figures are labelled estimates with vintage ("on the order of $X bn as of [year] — verify"). If the company's growth depends on a market that does not exist yet, say so plainly.
 
 **The dream**
 What the most ambitious credible bulls believe: optionality not yet in the numbers, new markets, platform effects. Label which parts are general knowledge and which are speculation.
@@ -97,18 +98,19 @@ A final line starting with "Bottom line:" — your speculative stance with a con
 
 Keep the whole note under 750 words.`;
 
-export function buildThemePrompt(topic, pulse) {
+export function buildThemePrompt(topic, pulse, webLines = []) {
   const lines = [
     `Theme: ${topic}`,
     `Today's date: ${new Date().toISOString().slice(0, 10)} (your general knowledge may end earlier — caveat where it matters).`,
   ];
+  if (webLines.length) lines.push('', ...webLines);
   const social = socialPulseToLines(pulse);
   if (social.length) lines.push('', ...social);
   lines.push('', 'Write the speculative theme outlook now.');
   return lines.join('\n');
 }
 
-export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol }) {
+export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol, webLines = [] }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -152,6 +154,7 @@ export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, his
     lines.push(`Tracked 13F managers: none of the followed institutions held ${symbol} among top positions last quarter.`);
   }
   lines.push(`Today's date: ${new Date().toISOString().slice(0, 10)}.`);
+  if (webLines.length) lines.push('', ...webLines);
   const social = socialPulseToLines(pulse);
   if (social.length) lines.push('', ...social);
   lines.push('');
@@ -196,13 +199,15 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
       const valuation = computeValuation(profile, fundamentals);
       const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
       // Positioning facts: 30-day social pulse, buzz-board rank, insider Form 4s,
-      // tracked 13F holders, and FINRA short-volume — all cached/keyless.
-      const [pulseRes, buzzBoard, insiderData, smartMoney, shortVol] = await Promise.all([
+      // tracked 13F holders, FINRA short-volume, live market-size snippets —
+      // all cached/keyless.
+      const [pulseRes, buzzBoard, insiderData, smartMoney, shortVol, webLines] = await Promise.all([
         getSocialPulse(profile?.name || sym).catch(() => null),
         getRedditBuzz().catch(() => null),
         getInsiderTransactions().catch(() => null),
         findSymbolAcrossManagers(sym).catch(() => null),
         shortVolFor(sym).catch(() => null),
+        marketSnippetLines(`${profile?.finnhubIndustry || profile?.name || sym}`).catch(() => []),
       ]);
       pulse = pulseRes;
       const idx = buzzBoard?.items?.findIndex((i) => i.symbol === sym) ?? -1;
@@ -212,7 +217,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
       const threadBody = top?.id ? await getPostBody(top.subreddit, top.id).catch(() => '') : '';
       const allTxns = Array.isArray(insiderData) ? insiderData : insiderData?.transactions || [];
       const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
-      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol });
+      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol, webLines });
       system = STOCK_OUTLOOK_PROMPT;
       data = {
         name: profile?.name || sym,
@@ -229,8 +234,12 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
     }
   }
   if (mode === 'theme') {
-    pulse = await getSocialPulse(topic).catch(() => null);
-    prompt = buildThemePrompt(topic, pulse);
+    const [pulseRes, webLines] = await Promise.all([
+      getSocialPulse(topic).catch(() => null),
+      marketSnippetLines(topic).catch(() => []),
+    ]);
+    pulse = pulseRes;
+    prompt = buildThemePrompt(topic, pulse, webLines);
     system = THEME_PROMPT;
   }
 

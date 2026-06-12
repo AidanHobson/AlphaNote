@@ -9,10 +9,19 @@ describe('outlook system prompts', () => {
   });
   it('demands real business descriptions and vintage-labelled market growth', () => {
     expect(THEME_PROMPT).toContain('TWO OR THREE SENTENCES on what the company actually does');
-    expect(THEME_PROMPT).toContain('commonly projected ~Y% CAGR — verify current forecasts');
     expect(STOCK_OUTLOOK_PROMPT).toContain('what the company actually DOES');
     expect(STOCK_OUTLOOK_PROMPT).toContain('**The market**');
     expect(STOCK_OUTLOOK_PROMPT).toContain('a market that does not exist yet');
+  });
+  it('prefers live web snippets (cited by domain) over training-data figures', () => {
+    for (const p of [THEME_PROMPT, STOCK_OUTLOOK_PROMPT]) {
+      expect(p).toContain('live web snippets are provided');
+      expect(p).toContain('source domain');
+    }
+  });
+  it('theme prompt embeds web snippet lines when provided', () => {
+    const p = buildThemePrompt('Robotics', null, ['Live web search — snippets:', '- "USD 88bn in 2026" (mordorintelligence.com)']);
+    expect(p).toContain('(mordorintelligence.com)');
   });
   it('bottlenecks section is fact-driven: evidence with vintage or leave it out', () => {
     expect(THEME_PROMPT).toContain('FACT-DRIVEN');

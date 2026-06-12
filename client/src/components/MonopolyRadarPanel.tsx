@@ -18,12 +18,13 @@ const tickersOf = (radar: MonopolyRadarNote | null) =>
         .filter((t): t is string => Boolean(t))
     : [];
 
-export default function MonopolyRadarPanel({ radar, busy, disabled, onRegen, onProfile }: {
+export default function MonopolyRadarPanel({ radar, busy, disabled, onRegen, onProfile, onTicker }: {
   radar: MonopolyRadarNote | null;
   busy: boolean;
   disabled: boolean;
   onRegen: () => void;
   onProfile: (ticker: string) => void;
+  onTicker?: (symbol: string) => void;
 }) {
   if (!radar && !busy) return null;
   const tickers = [...new Set(tickersOf(radar))];
@@ -40,7 +41,7 @@ export default function MonopolyRadarPanel({ radar, busy, disabled, onRegen, onP
         )}
       </div>
       <div className="ai-body" style={{ opacity: busy ? 0.5 : 1 }}>
-        {radar ? <AIText text={radar.text} /> : <SkeletonLines lines={10} />}
+        {radar ? <AIText onTicker={onTicker} text={radar.text} /> : <SkeletonLines lines={10} />}
         {radar && tickers.length > 0 && (
           <div className="mgr-pills" style={{ marginTop: 12 }}>
             {tickers.map((t) => (

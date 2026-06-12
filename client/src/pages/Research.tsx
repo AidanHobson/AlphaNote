@@ -195,7 +195,7 @@ export default function Research() {
               onClick={() => run(note.symbol, true)} disabled={loading}>↻</button>
           </div>
           <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
-            <AIText text={note.text} />
+            <AIText text={note.text} onTicker={(s) => run(s)} />
           </div>
           <div className="ai-foot">
             AI-generated · {providerLabel(note.provider)}{note.fellBack ? ' (primary unavailable)' : ''}
@@ -229,7 +229,7 @@ export default function Research() {
               onClick={() => run(outlook.topic, true)} disabled={loading}>↻</button>
           </div>
           <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
-            <AIText text={outlook.text} />
+            <AIText text={outlook.text} onTicker={(s) => run(s)} />
           </div>
           <div className="ai-foot">
             Speculative AI analysis · {providerLabel(outlook.provider)}{outlook.fellBack ? ' (primary unavailable)' : ''}
@@ -264,7 +264,7 @@ export default function Research() {
               onClick={() => run(monopoly.topic, true)} disabled={loading}>↻</button>
           </div>
           <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
-            <AIText text={monopoly.text} />
+            <AIText text={monopoly.text} onTicker={(s) => run(s)} />
           </div>
           <div className="ai-foot">
             Speculative monopoly research · {providerLabel(monopoly.provider)}{monopoly.fellBack ? ' (primary unavailable)' : ''}
@@ -282,7 +282,7 @@ export default function Research() {
       {isMonopoly && (
         <>
           {monoRadarError && <div className="error-banner" style={{ marginTop: 16 }}>{monoRadarError}</div>}
-          <MonopolyRadarPanel radar={monoRadar} busy={monoRadarBusy} disabled={loading}
+          <MonopolyRadarPanel radar={monoRadar} busy={monoRadarBusy} disabled={loading} onTicker={(s) => run(s)}
             onRegen={() => runMonoRadar(true)} onProfile={(t) => run(t)} />
           {!monoRadar && !monoRadarBusy && (
             <div className={active || loading ? '' : 'empty'} style={{ marginTop: 16, textAlign: 'center' }}>
@@ -303,10 +303,10 @@ export default function Research() {
         buzz?.available && buzz.items.length ? (
           <>
             {radarError && <div className="error-banner" style={{ marginTop: 16 }}>{radarError}</div>}
-            <ThemeRadarPanel radar={radar} busy={radarBusy} disabled={loading}
+            <ThemeRadarPanel radar={radar} busy={radarBusy} disabled={loading} onTicker={(s) => run(s)}
               onRegen={() => runRadar(true)} onTheme={(t) => run(sanitizeTopic(t))} />
             {briefError && <div className="error-banner" style={{ marginTop: 16 }}>{briefError}</div>}
-            <RetailPulsePanel brief={brief} busy={briefBusy} onRegen={() => runBrief(true)} />
+            <RetailPulsePanel brief={brief} busy={briefBusy} onRegen={() => runBrief(true)} onTicker={(s) => run(s)} />
             <BuzzBoardCard
               buzz={buzz}
               loading={loading}

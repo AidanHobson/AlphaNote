@@ -15,6 +15,7 @@ import { getSocialPulse, socialPulseToLines } from './social.js';
 import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
 import { shortVolFor } from './shortvol.js';
+import { marketSnippetLines } from './websearch.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
@@ -42,7 +43,7 @@ Write the profile in exactly this structure:
 One line each: archetype (from the taxonomy), moat strength (Narrow / Wide / Entrenched) with a one-line rationale, consensus awareness (Widely known / Partially recognised / Underfollowed), and market-cap tier from the supplied market cap (mega >$100B / large $10-100B / mid $2-10B / small $300M-2B / micro <$300M — flag liquidity risk for small/micro).
 
 **The structural advantage**
-Open with two or three sentences on what the company actually DOES in plain terms — products, who buys them, how it makes money (do not assume the reader knows the name). Then: what the monopoly is, why it persists, and the barriers to entry — be specific about WHAT excludes competitors (physics, licence, certification, switching costs), not adjectives. Close with the size and expected growth of the niche it controls, as labelled estimates with vintage ("on the order of $X bn as of [year], projected ~Y% — verify").
+Open with two or three sentences on what the company actually DOES in plain terms — products, who buys them, how it makes money (do not assume the reader knows the name). Then: what the monopoly is, why it persists, and the barriers to entry — be specific about WHAT excludes competitors (physics, licence, certification, switching costs), not adjectives. Close with the size and expected growth of the niche it controls: when live web snippets are provided, cite their figures with source domains (present ranges where sources disagree); otherwise labelled estimates with vintage ("on the order of $X bn as of [year] — verify").
 
 **Financial fingerprint**
 Read the supplied financials for monopoly evidence: are margins and ROE consistent with pricing power? Is cash conversion (OCF/NI) confirming earnings quality? Does revenue growth suggest rent extraction or a maturing franchise? Use the quarterly trajectory where supplied.
@@ -69,7 +70,7 @@ A final line starting with "Bottom line:" — conviction 1-5 with what would mov
 
 Keep the whole note under 900 words.`;
 
-export function buildMonopolyPrompt({ symbol, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse }) {
+export function buildMonopolyPrompt({ symbol, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse, webLines = [] }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -133,6 +134,7 @@ export function buildMonopolyPrompt({ symbol, quote, profile, valuation, fundame
     lines.push('Tracked 13F managers: none of the followed institutions held it among top positions last quarter — a possible under-followed signal (the tracked set is small; do not over-read).');
   }
 
+  if (webLines.length) lines.push('', ...webLines);
   const social = socialPulseToLines(pulse);
   if (social.length) lines.push('', ...social);
 
@@ -196,13 +198,16 @@ export async function generateMonopolyNote(rawTopic, { force = false } = {}) {
     findSymbolAcrossManagers(sym).catch(() => null),
     shortVolFor(sym).catch(() => null),
   ]);
-  const pulse = await getSocialPulse(profile?.name || sym).catch(() => null);
+  const [pulse, webLines] = await Promise.all([
+    getSocialPulse(profile?.name || sym).catch(() => null),
+    marketSnippetLines(`${profile?.name || sym} ${profile?.finnhubIndustry || ''}`).catch(() => []),
+  ]);
   const valuation = computeValuation(profile, fundamentals);
   const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
   const allTxns = Array.isArray(insiderData) ? insiderData : insiderData?.transactions || [];
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
 
-  const prompt = buildMonopolyPrompt({ symbol: sym, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse });
+  const prompt = buildMonopolyPrompt({ symbol: sym, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse, webLines });
   const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_PROMPT, { maxTokens: 2300 });
 
   const note = {
