@@ -147,13 +147,14 @@ export const MONOPOLY_RADAR_PROMPT = `You are AlphaNote's monopoly scout. Identi
 ${TAXONOMY}
 
 Coverage mandate:
-- Present 6-9 candidates spanning the market-cap tiers, ordered largest to smallest: at most 2 mega/large-cap anchors, and AT LEAST 3 must be sub-$5B (small- or micro-cap) — that is where the mandate's alpha lives. Flag liquidity risk on micro-caps.
+- Present 8-12 candidates spanning the market-cap tiers, ordered largest to smallest: at most 2 mega/large-cap anchors, and AT LEAST 4 must be sub-$5B (small- or micro-cap) — that is where the mandate's alpha lives. Flag liquidity risk on micro-caps.
 - Hunt in the classic under-followed monopoly habitats: sole-source defence/aerospace components, certification and testing authorities, exclusive spectrum or licence holders, rare-earth and speciality-materials processing, grid/utility chokepoints, satellite slots and cable landing rights, nuclear-qualified suppliers.
 - Do NOT pad with famous mega-cap monopolists beyond the 2 anchors (ASML, Moody's, Veeva, TransDigm and the like are known; mention at most briefly).
 
 Rails (fact-driven):
 - All of this comes from your general knowledge: state plainly that tiers, market caps, and even listing status are as of your training cutoff and MUST be verified before acting.
 - Every candidate needs the factual basis of its monopoly stated concretely ("sole holder of X licence", "only FAA-certified supplier of Y") with a confidence label — if you cannot state the basis, leave the name out. Fewer credible names beats padding.
+- One candidate per bold line, with its FINAL ticker — never emit corrections, "pivot to", or alternative tickers inside a line. If you are unsure of a company's ticker, choose a different candidate whose ticker you are sure of.
 - No personalised investment advice. Plain text; bullets start with "- ".
 
 Format — for EACH candidate, exactly this shape:
@@ -230,17 +231,32 @@ export async function generateMonopolyNote(rawTopic, { force = false } = {}) {
   return { ...note, cached: false };
 }
 
+// Tickers surfaced by the previous scan — fed back as exclusions on a forced
+// rescan, so each ↻ digs into NEW territory instead of repeating itself.
+export function extractRadarTickers(text) {
+  return [...new Set(
+    [...String(text).matchAll(/^\*\*([^*\n]+)\*\*\s*$/gm)]
+      .map((m) => /^([A-Z][A-Z0-9.\-]{0,9})\s*[—–-]/.exec(m[1])?.[1]
+        || /\(([A-Z][A-Z0-9.\-]{1,9})\)/.exec(m[1])?.[1]
+        || null)
+      .filter(Boolean),
+  )];
+}
+
 export async function generateMonopolyRadar({ force = false } = {}) {
   if (!force && radarCache.note && Date.now() - radarCache.t < RADAR_TTL) {
     return { ...radarCache.note, cached: true };
   }
-  const prompt = [
+  const previously = radarCache.note ? extractRadarTickers(radarCache.note.text) : [];
+  const lines = [
     `Today's date: ${new Date().toISOString().slice(0, 10)} (your knowledge has a training cutoff — caveat accordingly).`,
-    'Known anchors already on the user\'s list (do not re-pitch beyond brief mentions): ASML, Moody\'s/S&P Global, Veeva, Tyler Technologies, TransDigm, Anterix, Preformed Line Products, Clearfield.',
-    '',
-    'Scout for structural monopolists now, honouring the cap-tier mandate.',
-  ].join('\n');
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_RADAR_PROMPT, { maxTokens: 1700 });
+    'Known anchors already on the user\'s seed list (do not re-pitch beyond brief mentions): ASML, Moody\'s/S&P Global, VeriSign, Fair Isaac, Veeva, Tyler Technologies, TransDigm, HEICO, Moog, Anterix, NV5 Global, Preformed Line Products, Clearfield, Mesa Laboratories, Core Molding, Ultralife.',
+  ];
+  if (previously.length) {
+    lines.push(`Candidates you surfaced on the previous scan (find DIFFERENT names this time): ${previously.join(', ')}.`);
+  }
+  lines.push('', 'Scout for structural monopolists now, honouring the cap-tier mandate.');
+  const { provider, text, fellBack } = await callAIWithFallback(lines.join('\n'), MONOPOLY_RADAR_PROMPT, { maxTokens: 1900 });
   const note = { kind: 'monopoly-radar', speculative: true, provider, fellBack, text, generatedAt: new Date().toISOString() };
   radarCache = { t: Date.now(), note };
   return { ...note, cached: false };

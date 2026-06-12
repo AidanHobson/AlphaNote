@@ -15,8 +15,13 @@ import { providerLabel } from '../lib/format';
 const MODES = ['Deep research', 'Speculative outlook', 'Monopoly research'];
 const RESEARCH_PILLS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'XOM'];
 const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'AI Bottlenecks', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
-// Seed universe from the monopoly mandate: known anchors + smaller names to verify.
-const MONOPOLY_PILLS = ['ASML', 'MCO', 'VEEV', 'TYL', 'TDG', 'ATEX', 'PLPC', 'CLFD'];
+// Seed universe from the monopoly mandate, spanning the cap tiers: mega/large
+// anchors (EUV, ratings, .com registry, credit scores, life-sciences cloud,
+// gov SaaS, sole-source aero), then the small/micro names where the alpha lives.
+const MONOPOLY_PILLS = [
+  'ASML', 'MCO', 'VRSN', 'FICO', 'VEEV', 'TYL', 'TDG', 'HEI',
+  'MOG.A', 'ATEX', 'NVEE', 'PLPC', 'CLFD', 'MLAB', 'CMT', 'ULBI',
+];
 
 const sanitizeTopic = (t: string) => t.replace(/[^A-Za-z0-9 .&\-/+']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 

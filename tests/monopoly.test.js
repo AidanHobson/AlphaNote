@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MONOPOLY_PROMPT, MONOPOLY_RADAR_PROMPT, buildMonopolyPrompt } from '../server/lib/monopoly.js';
+import { MONOPOLY_PROMPT, MONOPOLY_RADAR_PROMPT, buildMonopolyPrompt, extractRadarTickers } from '../server/lib/monopoly.js';
 
 describe('MONOPOLY_PROMPT (per-ticker profile)', () => {
   it('embeds the six-archetype taxonomy', () => {
@@ -30,7 +30,8 @@ describe('MONOPOLY_PROMPT (per-ticker profile)', () => {
 
 describe('MONOPOLY_RADAR_PROMPT (discovery)', () => {
   it('enforces the cap-tier mandate with the sub-$5B quota', () => {
-    expect(MONOPOLY_RADAR_PROMPT).toContain('AT LEAST 3 must be sub-$5B');
+    expect(MONOPOLY_RADAR_PROMPT).toContain('8-12 candidates');
+    expect(MONOPOLY_RADAR_PROMPT).toContain('AT LEAST 4 must be sub-$5B');
     expect(MONOPOLY_RADAR_PROMPT).toContain('at most 2 mega/large-cap anchors');
   });
   it('hunts the under-followed habitats and refuses padding', () => {
@@ -39,6 +40,21 @@ describe('MONOPOLY_RADAR_PROMPT (discovery)', () => {
     }
     expect(MONOPOLY_RADAR_PROMPT).toContain('Fewer credible names beats padding');
     expect(MONOPOLY_RADAR_PROMPT).toContain('MUST be verified');
+    expect(MONOPOLY_RADAR_PROMPT).toContain('never emit corrections, "pivot to"');
+  });
+});
+
+describe('extractRadarTickers (rescan-diversity exclusions)', () => {
+  it('handles both "TICKER —" and "NAME (TICKER)" bold-line formats, deduped', () => {
+    const text = [
+      '**MONOPOLY SCOUT REPORT — AlphaNote**',
+      '**ATEX — Anterix (small-cap, Archetype 2)**',
+      '**HEICO CORP. (HEI) — HEICO Corporation (large-cap)**',
+      '**MOOG INC. (MOG.A) — Moog (large-cap)**',
+      '**ATEX — Anterix again**',
+      'Bottom line: profile ATEX first.',
+    ].join('\n');
+    expect(extractRadarTickers(text)).toEqual(['ATEX', 'HEI', 'MOG.A']);
   });
 });
 
