@@ -19,15 +19,25 @@ async function fetchJSON(url) {
   return res.json();
 }
 
-async function getCompany(symbol) {
-  const sym = String(symbol || '').toUpperCase();
+async function loadTickerMap() {
   if (!tickerMap.data || Date.now() - tickerMap.t > TICKER_TTL) {
     const raw = await fetchJSON('https://www.sec.gov/files/company_tickers.json');
     const map = new Map();
     for (const v of Object.values(raw)) map.set(String(v.ticker).toUpperCase(), { cik: String(v.cik_str).padStart(10, '0'), title: v.title });
     tickerMap = { t: Date.now(), data: map };
   }
-  return tickerMap.data.get(sym) || null;
+  return tickerMap.data;
+}
+
+async function getCompany(symbol) {
+  const sym = String(symbol || '').toUpperCase();
+  return (await loadTickerMap()).get(sym) || null;
+}
+
+// Every SEC-registered ticker, as a Set — used to validate ticker mentions
+// extracted from noisy text (Reddit titles) without any extra API calls.
+export async function tickerUniverse() {
+  return new Set((await loadTickerMap()).keys());
 }
 
 // Best-effort issuer-name → ticker (for linking 13F holdings to the Explorer).

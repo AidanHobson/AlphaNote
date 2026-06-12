@@ -10,6 +10,7 @@ import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } 
 import { generateStockInsight } from './lib/insight.js';
 import { generateResearchNote } from './lib/research.js';
 import { generateOutlook } from './lib/outlook.js';
+import { getRedditBuzz } from './lib/buzz.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -310,6 +311,11 @@ app.get('/api/history/:symbol', wrap(async (req, res) => {
 }));
 
 // ── Smart Money (EDGAR 13F institutional holdings, curated managers) ──────────
+// ── Reddit buzz: trending tickers across finance subreddits (keyless) ────────
+app.get('/api/social/buzz', wrap(async (req, res) => {
+  res.json(await getRedditBuzz());
+}));
+
 app.get('/api/smartmoney', (req, res) => res.json({ managers: listManagers() }));
 app.get('/api/smartmoney/:cik', wrap(async (req, res) => {
   res.json(await getManagerBoard(req.params.cik));

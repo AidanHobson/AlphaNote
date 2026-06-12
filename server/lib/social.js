@@ -95,7 +95,7 @@ async function polymarket(topic) {
 // upvote scores — the keyless path Reddit still serves where .json is blocked.
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
-async function fetchText(url, { timeout = 9000 } = {}) {
+export async function fetchText(url, { timeout = 9000 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -132,16 +132,31 @@ export function parseRedditRss(xml) {
   return posts;
 }
 
-// shreddit listing partial → real scores, keyed by post id.
-export function parseShredditListing(html) {
-  const scores = new Map();
+// shreddit listing partial → full posts (title, subreddit, score, comments).
+export function parseShredditPosts(html) {
+  const posts = [];
+  const seen = new Set();
   for (const [, attrs] of String(html).matchAll(/<shreddit-post\b([^>]*)>/g)) {
     const attr = (name) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
-    const id = postIdFrom(attr('permalink'));
-    if (!id || scores.has(id)) continue;
-    scores.set(id, { score: Number(attr('score')) || 0, comments: Number(attr('comment-count')) || 0 });
+    const permalink = attr('permalink') || '';
+    const id = postIdFrom(permalink);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    posts.push({
+      id,
+      title: decodeEntities(attr('post-title') || ''),
+      subreddit: /^\/(r\/[^/]+)\//.exec(permalink)?.[1] || '',
+      score: Number(attr('score')) || 0,
+      comments: Number(attr('comment-count')) || 0,
+      date: (attr('created-timestamp') || '').slice(0, 10),
+    });
   }
-  return scores;
+  return posts;
+}
+
+// shreddit listing partial → real scores, keyed by post id.
+export function parseShredditListing(html) {
+  return new Map(parseShredditPosts(html).map((p) => [p.id, { score: p.score, comments: p.comments }]));
 }
 
 async function redditJson(topic) {

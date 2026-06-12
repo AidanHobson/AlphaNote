@@ -9,6 +9,7 @@ import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { computeValuation } from './research.js';
 import { getSocialPulse, socialPulseToLines } from './social.js';
+import { getRedditBuzz } from './buzz.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, boundedSet } from './utils.js';
 
@@ -95,7 +96,7 @@ export function buildThemePrompt(topic, pulse) {
   return lines.join('\n');
 }
 
-export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse }) {
+export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -120,6 +121,9 @@ export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, his
     if (m.length) lines.push(`Derived valuation (TTM): ${m.join(', ')}${valuation.fcf != null ? `; FCF ${fmtUsd(valuation.fcf)}` : ''}`);
   }
   if (nextEarnings?.date) lines.push(`Next scheduled earnings: ${nextEarnings.date}.`);
+  if (buzz) {
+    lines.push(`Reddit retail attention: #${buzz.rank} most-mentioned ticker across r/wallstreetbets + 4 finance subreddits this week (${buzz.mentions} mention${buzz.mentions > 1 ? 's' : ''}, ${buzz.engagement.toLocaleString('en-US')} combined upvotes+comments).${buzz.topPost ? ` Top thread: "${buzz.topPost.title}" (${buzz.topPost.subreddit})` : ''} Treat as positioning/crowding signal — heavy retail attention cuts both ways.`);
+  }
   lines.push(`Today's date: ${new Date().toISOString().slice(0, 10)}.`);
   const social = socialPulseToLines(pulse);
   if (social.length) lines.push('', ...social);
@@ -164,9 +168,16 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
       ]);
       const valuation = computeValuation(profile, fundamentals);
       const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
-      // 30-day social pulse keyed on the company name (falls back to ticker).
-      pulse = await getSocialPulse(profile?.name || sym).catch(() => null);
-      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse });
+      // 30-day social pulse keyed on the company name (falls back to ticker),
+      // plus the ticker's rank on the finance-subreddit buzz board if present.
+      const [pulseRes, buzzBoard] = await Promise.all([
+        getSocialPulse(profile?.name || sym).catch(() => null),
+        getRedditBuzz().catch(() => null),
+      ]);
+      pulse = pulseRes;
+      const idx = buzzBoard?.items?.findIndex((i) => i.symbol === sym) ?? -1;
+      const buzz = idx >= 0 ? { rank: idx + 1, ...buzzBoard.items[idx] } : null;
+      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz });
       system = STOCK_OUTLOOK_PROMPT;
       data = {
         name: profile?.name || sym,
@@ -175,6 +186,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
         changePercent: quote.dp,
         currency: profile?.currency || 'USD',
         logo: profile?.logo || '',
+        buzz: buzz ? { rank: buzz.rank, mentions: buzz.mentions } : undefined,
       };
     }
   }

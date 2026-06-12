@@ -60,6 +60,15 @@ describe('buildStockOutlookPrompt', () => {
     expect(p).toContain('Stock symbol: ACME');
     expect(p).not.toContain('Derived valuation');
     expect(p).not.toContain('Next scheduled earnings');
+    expect(p).not.toContain('Reddit retail attention');
+  });
+  it('includes the Reddit buzz rank as a crowding signal when the ticker is trending', () => {
+    const buzz = { rank: 2, mentions: 5, engagement: 7150, topPost: { title: 'GME to the moon', subreddit: 'r/wallstreetbets' } };
+    const p = buildStockOutlookPrompt({ symbol: 'GME', quote: { c: 25, dp: 3.1 }, buzz });
+    expect(p).toContain('Reddit retail attention: #2 most-mentioned ticker');
+    expect(p).toContain('5 mentions, 7,150 combined upvotes+comments');
+    expect(p).toContain('Top thread: "GME to the moon" (r/wallstreetbets)');
+    expect(p).toContain('heavy retail attention cuts both ways');
   });
 });
 

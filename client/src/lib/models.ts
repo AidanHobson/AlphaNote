@@ -104,7 +104,18 @@ export interface Insight {
 export interface OutlookNote {
   topic: string; mode: 'stock' | 'theme'; speculative: true;
   provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;
-  data: { name: string; price?: number; change?: number; changePercent?: number; currency?: string; logo?: string; social?: string[] };
+  data: {
+    name: string; price?: number; change?: number; changePercent?: number; currency?: string; logo?: string;
+    social?: string[]; buzz?: { rank: number; mentions: number };
+  };
+}
+export interface BuzzItem {
+  symbol: string; mentions: number; engagement: number; subreddits: string[];
+  topPost: { title: string; subreddit: string; score: number; comments: number } | null;
+}
+export interface BuzzBoard {
+  generatedAt: string; window: string; subreddits: string[]; postsScanned: number;
+  available: boolean; reason?: string; items: BuzzItem[];
 }
 export interface ResearchNote {
   symbol: string; provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;

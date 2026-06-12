@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote } from '../lib/models';
+import { useEffect, useState } from 'react';
+import { getJSON, postJSON } from '../lib/api';
+import type { ResearchNote, OutlookNote, BuzzBoard } from '../lib/models';
 import AIText from '../components/AIText';
+import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import { SkeletonLines } from '../components/Skeleton';
 
@@ -20,6 +21,12 @@ export default function Research() {
   const [outlook, setOutlook] = useState<OutlookNote | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [buzz, setBuzz] = useState<BuzzBoard | null>(null);
+
+  // Load the Reddit buzz board once, the first time the outlook tab opens.
+  useEffect(() => {
+    if (isOutlook && !buzz) getJSON<BuzzBoard>('/api/social/buzz').then(setBuzz).catch(() => {});
+  }, [isOutlook, buzz]);
 
   const run = (raw: string, force = false) => {
     const topic = raw.trim();
@@ -152,6 +159,7 @@ export default function Research() {
             Speculative AI analysis · {providerLabel(outlook.provider)}{outlook.fellBack ? ' (primary unavailable)' : ''}
             {' · '}blends the model's general knowledge (which may be out of date) with {outlook.mode === 'stock' ? 'live market data' : 'no live market data'}
             {(outlook.data.social?.length ?? 0) > 0 ? ` + last-30-days signal (${outlook.data.social!.join(', ')})` : ''}
+            {outlook.data.buzz ? ` · #${outlook.data.buzz.rank} on Reddit's finance subs this week (${outlook.data.buzz.mentions} mentions)` : ''}
             {' · '}verify tickers and figures in Deep research before acting
             {' · '}generated {new Date(outlook.generatedAt).toLocaleTimeString()}{outlook.cached ? ' (cached)' : ''}
             {' · '}not investment advice
@@ -159,12 +167,50 @@ export default function Research() {
         </div>
       )}
 
-      {!active && !loading && !error && (
+      {!active && !loading && !error && !isOutlook && (
         <div className="empty">
-          {isOutlook
-            ? 'Pick a theme above — or type any theme or ticker — for a speculative outlook.'
-            : 'Pick a ticker above to generate an institutional-style research note.'}
+          Pick a ticker above to generate an institutional-style research note.
         </div>
+      )}
+
+      {isOutlook && (
+        buzz?.available && buzz.items.length ? (
+          <Card
+            title="Trending on Reddit"
+            sub={`${buzz.subreddits.join(' · ')} — ${buzz.window} (${buzz.postsScanned} posts scanned) · click a ticker for its outlook`}
+            style={{ marginTop: 16 }}
+          >
+            <table className="mtable">
+              <thead><tr><th>#</th><th>Ticker</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Engagement</th></tr></thead>
+              <tbody>
+                {buzz.items.slice(0, 12).map((b, i) => (
+                  <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
+                    onClick={() => !loading && run(b.symbol)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !loading) run(b.symbol); }}>
+                    <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{b.symbol}</td>
+                    <td>
+                      {b.topPost && (
+                        <>
+                          <div style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.topPost.title}</div>
+                          <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{b.topPost.subreddit} · {b.topPost.score.toLocaleString()} upvotes · {b.topPost.comments.toLocaleString()} comments</div>
+                        </>
+                      )}
+                    </td>
+                    <td className="num">{b.mentions}</td>
+                    <td className="num">{b.engagement.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        ) : !active && !loading && !error ? (
+          <div className="empty">
+            {buzz && !buzz.available
+              ? 'Reddit trending board unavailable right now — type any theme or ticker above for a speculative outlook.'
+              : 'Pick a theme above — or type any theme or ticker — for a speculative outlook.'}
+          </div>
+        ) : null
       )}
     </div>
   );
