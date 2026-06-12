@@ -35,6 +35,9 @@ Two or three sentences: what it is, and why it could matter to public-market inv
 **Why now**
 What has changed recently (technology, cost curves, policy, demand) that puts this theme on the clock — and how confident you are in each driver. When a "Last 30 days" social/forum signal is provided, use it to ground what is actually being discussed right now (and note where current attention diverges from your prior knowledge).
 
+**Market size & trajectory**
+The market today and how it is expected to expand: rough current size, the commonly projected growth path, and — more importantly — WHAT drives that expansion (adoption curves, regulation, cost declines, replacement cycles) and what would stall it. Every figure is a labelled estimate with its vintage ("on the order of $X bn as of [year], commonly projected ~Y% CAGR — verify current forecasts"); distinguish consensus projections from your own speculation about where growth could surprise.
+
 **Value chain**
 Bullets mapping the sub-segments (e.g. components → systems → applications) and where the economic leverage likely sits.
 
@@ -45,7 +48,7 @@ The enabling layer: the toolmakers, test and measurement houses, equipment, comp
 The scarce inputs that gate the theme's growth — where demand outruns supply and pricing power concentrates (in the AI buildout, think electrical power and grid interconnects, HBM memory, advanced packaging capacity, and optical interconnects). This section is FACT-DRIVEN: each bottleneck must name (1) the constraint, (2) the public companies positioned at it, and (3) a supporting fact — a concrete number or datapoint you are confident in, stated with its vintage ("as of …"), or evidence from the live signal provided. If you cannot support a claimed bottleneck with a fact, leave it out entirely. For each, say what relieves it and roughly when — a bottleneck with a visible relief date is a trade, not a thesis.
 
 **Public-market exposure**
-8-12 bullets spanning the market-cap spectrum, ordered roughly largest to smallest: ticker (exchange), one-line role in the theme, a role tag — pure-play, diversified, or picks-and-shovels enabler — and an approximate market-cap tier from your training data: [mega/large: >$10B], [mid: $2-10B], or [small: <$2B]. Requirements:
+8-12 bullets spanning the market-cap spectrum, ordered roughly largest to smallest. Each bullet: ticker (exchange), then TWO OR THREE SENTENCES on what the company actually does — its products, who buys them, and how it makes money — and its specific role in this theme (not just a sector label), plus a role tag — pure-play, diversified, or picks-and-shovels enabler — and an approximate market-cap tier from your training data: [mega/large: >$10B], [mid: $2-10B], or [small: <$2B]. Requirements:
 - At LEAST 4 of the names must be small- or mid-cap. The speculative reader already knows the mega-caps; the differentiated value of this list is the smaller, less-obvious names closer to pure-play exposure.
 - For each small/mid name, say whether its theme revenue is REAL today or still prospective (pre-revenue story stocks must be labelled as such), and flag the small-cap hazards where relevant: thin liquidity, dilution risk, customer concentration, going-concern risk.
 - Market caps move — tiers are approximate as of your training data. State plainly that the whole list comes from general knowledge, may be stale or incomplete, and must be verified in the Research tab before acting. If you genuinely cannot name enough credible small/mid-cap names for this theme, say so rather than padding with weak fits.
@@ -64,7 +67,7 @@ Concrete signposts: KPIs, product milestones, policy decisions, earnings lines t
 
 A final line starting with "Bottom line:" — your stance on the theme with a conviction score out of 5 and a time horizon (e.g. "Bottom line: constructive over 3-5 years, conviction 2/5 — early but real"). This is speculative analysis, not investment advice.
 
-Keep the whole note under 650 words.`;
+Keep the whole note under 900 words.`;
 
 export const STOCK_OUTLOOK_PROMPT = `You are AlphaNote's thematic strategist writing a SPECULATIVE outlook on a single stock — the blue-sky/bear-trap counterpart to the firm's evidence-led research note on the same name. Anchor on the live data provided, then go beyond it: what the bulls dream about, what the bears fear, and what the skew looks like.
 
@@ -73,7 +76,10 @@ ${SHARED_RAILS}
 Write the outlook in exactly this structure:
 
 **Setup**
-Two or three sentences anchored to the live data: where the stock and valuation stand today. Classify the business: is this a picks-and-shovels enabler (it sells the tools, tests, equipment, or infrastructure an industry needs, and gets paid whichever player wins — e.g. Technoprobe in semiconductor test, Aehr in wafer-level test) or an end-market bet on a winner? Let that classification shape the rest of the note: enablers trade winner-picking risk for capex cyclicality and customer concentration.
+Open with two or three sentences on what the company actually DOES — its products, who buys them, and how it makes money (general knowledge, labelled; do not assume the reader knows the name). Then anchor to the live data: where the stock and valuation stand today. Classify the business: is this a picks-and-shovels enabler (it sells the tools, tests, equipment, or infrastructure an industry needs, and gets paid whichever player wins — e.g. Technoprobe in semiconductor test, Aehr in wafer-level test) or an end-market bet on a winner? Let that classification shape the rest of the note: enablers trade winner-picking risk for capex cyclicality and customer concentration.
+
+**The market**
+The end market(s) this company sells into and how they are expected to expand: rough size today and the commonly projected growth, with what drives it and what could stall it. Figures are labelled estimates with vintage ("on the order of $X bn as of [year] — verify"); distinguish consensus projections from your own view of where growth could surprise. If the company's growth depends on a market that does not exist yet, say so plainly.
 
 **The dream**
 What the most ambitious credible bulls believe: optionality not yet in the numbers, new markets, platform effects. Label which parts are general knowledge and which are speculation.
@@ -89,7 +95,7 @@ Concrete, watchable indicators that the dream or the nightmare is starting to pl
 
 A final line starting with "Bottom line:" — your speculative stance with a conviction score out of 5 and a time horizon. This is speculative analysis, not investment advice.
 
-Keep the whole note under 550 words.`;
+Keep the whole note under 750 words.`;
 
 export function buildThemePrompt(topic, pulse) {
   const lines = [
@@ -228,7 +234,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
     system = THEME_PROMPT;
   }
 
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, system, { maxTokens: 1700 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, system, { maxTokens: 2300 });
 
   const note = {
     topic,

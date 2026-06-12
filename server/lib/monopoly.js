@@ -42,7 +42,7 @@ Write the profile in exactly this structure:
 One line each: archetype (from the taxonomy), moat strength (Narrow / Wide / Entrenched) with a one-line rationale, consensus awareness (Widely known / Partially recognised / Underfollowed), and market-cap tier from the supplied market cap (mega >$100B / large $10-100B / mid $2-10B / small $300M-2B / micro <$300M — flag liquidity risk for small/micro).
 
 **The structural advantage**
-What the monopoly is, why it persists, and the barriers to entry. Be specific about WHAT excludes competitors (physics, licence, certification, switching costs) — not adjectives.
+Open with two or three sentences on what the company actually DOES in plain terms — products, who buys them, how it makes money (do not assume the reader knows the name). Then: what the monopoly is, why it persists, and the barriers to entry — be specific about WHAT excludes competitors (physics, licence, certification, switching costs), not adjectives. Close with the size and expected growth of the niche it controls, as labelled estimates with vintage ("on the order of $X bn as of [year], projected ~Y% — verify").
 
 **Financial fingerprint**
 Read the supplied financials for monopoly evidence: are margins and ROE consistent with pricing power? Is cash conversion (OCF/NI) confirming earnings quality? Does revenue growth suggest rent extraction or a maturing franchise? Use the quarterly trajectory where supplied.
@@ -67,7 +67,7 @@ Concrete dated or watchable events: the next earnings date when provided, licenc
 
 A final line starting with "Bottom line:" — conviction 1-5 with what would move it up or down one notch. Analysis, not investment advice.
 
-Keep the whole note under 750 words.`;
+Keep the whole note under 900 words.`;
 
 export function buildMonopolyPrompt({ symbol, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse }) {
   const lines = [];
@@ -203,7 +203,7 @@ export async function generateMonopolyNote(rawTopic, { force = false } = {}) {
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
 
   const prompt = buildMonopolyPrompt({ symbol: sym, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse });
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_PROMPT, { maxTokens: 1900 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_PROMPT, { maxTokens: 2300 });
 
   const note = {
     topic: sym,

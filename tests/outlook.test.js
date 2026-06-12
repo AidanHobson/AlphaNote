@@ -3,9 +3,16 @@ import { THEME_PROMPT, STOCK_OUTLOOK_PROMPT, buildThemePrompt, buildStockOutlook
 
 describe('outlook system prompts', () => {
   it('theme prompt has the speculative structure', () => {
-    for (const s of ['**The theme**', '**Why now**', '**Value chain**', '**Picks & shovels**', '**Bottlenecks**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
+    for (const s of ['**The theme**', '**Why now**', '**Market size & trajectory**', '**Value chain**', '**Picks & shovels**', '**Bottlenecks**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
       expect(THEME_PROMPT).toContain(s);
     }
+  });
+  it('demands real business descriptions and vintage-labelled market growth', () => {
+    expect(THEME_PROMPT).toContain('TWO OR THREE SENTENCES on what the company actually does');
+    expect(THEME_PROMPT).toContain('commonly projected ~Y% CAGR — verify current forecasts');
+    expect(STOCK_OUTLOOK_PROMPT).toContain('what the company actually DOES');
+    expect(STOCK_OUTLOOK_PROMPT).toContain('**The market**');
+    expect(STOCK_OUTLOOK_PROMPT).toContain('a market that does not exist yet');
   });
   it('bottlenecks section is fact-driven: evidence with vintage or leave it out', () => {
     expect(THEME_PROMPT).toContain('FACT-DRIVEN');
@@ -33,7 +40,7 @@ describe('outlook system prompts', () => {
     expect(THEME_PROMPT).toContain('rather than padding with weak fits');
   });
   it('stock prompt has the dream/nightmare structure', () => {
-    for (const s of ['**Setup**', '**The dream**', '**The nightmare**', '**Asymmetry**', '**Signposts**']) {
+    for (const s of ['**Setup**', '**The market**', '**The dream**', '**The nightmare**', '**Asymmetry**', '**Signposts**']) {
       expect(STOCK_OUTLOOK_PROMPT).toContain(s);
     }
   });

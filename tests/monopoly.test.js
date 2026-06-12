@@ -22,6 +22,10 @@ describe('MONOPOLY_PROMPT (per-ticker profile)', () => {
     expect(MONOPOLY_PROMPT).toContain('no invented price targets');
     expect(MONOPOLY_PROMPT).toContain('No personalised investment advice');
   });
+  it('demands a plain-terms business description and niche growth estimates', () => {
+    expect(MONOPOLY_PROMPT).toContain('what the company actually DOES in plain terms');
+    expect(MONOPOLY_PROMPT).toContain('size and expected growth of the niche it controls');
+  });
   it('covers all cap tiers including small/micro with liquidity flags', () => {
     expect(MONOPOLY_PROMPT).toContain('small $300M-2B / micro <$300M');
     expect(MONOPOLY_PROMPT).toContain('flag liquidity risk for small/micro');
