@@ -81,6 +81,7 @@ describe('Retail Pulse brief', () => {
     }
     expect(BRIEF_PROMPT).toContain('not fundamentals');
     expect(BRIEF_PROMPT).toContain('No personalised investment advice');
+    expect(BRIEF_PROMPT).toContain('picks-and-shovels');
   });
   it('buildBriefPrompt renders ranks, today counts, RISING flags, prices, and threads', () => {
     const board = {

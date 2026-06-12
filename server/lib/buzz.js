@@ -148,7 +148,7 @@ Two or three bullets on the dominant names/clusters and what the thread titles s
 Which names are accelerating in today's scan vs the weekly board (if none stand out, say so).
 
 **Contrarian read**
-One or two bullets: where the attention looks crowded or late, and what the bears among the threads are saying if visible.
+One or two bullets: where the attention looks crowded or late, and what the bears among the threads are saying if visible. If the crowd is chasing application-layer winners, note the picks-and-shovels angle — the toolmakers/testers/suppliers that earn from the same trend without the winner-picking risk — when one plausibly exists (general knowledge, labelled).
 
 A final line starting with "Bottom line:" — the one thing worth taking from this board, with the reminder that this is speculative attention data, not advice.`;
 

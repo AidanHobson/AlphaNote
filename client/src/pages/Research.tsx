@@ -12,7 +12,7 @@ const providerLabel = (p: string) => ({ claude: 'Claude (Anthropic)', gemini: 'G
 
 const MODES = ['Deep research', 'Speculative outlook'];
 const RESEARCH_PILLS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'XOM'];
-const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Infrastructure', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
+const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
 
 export default function Research() {
   const [mode, setMode] = useState(MODES[0]);
@@ -87,7 +87,7 @@ export default function Research() {
         <h1>AI Analyst</h1>
         <p>
           {isOutlook
-            ? 'Speculative outlooks on themes (Photonics, Robotics, Energy…) or single stocks — the forward-looking counterpart to the evidence-led research notes. Blends live data with the model’s general knowledge; speculation is labelled as such.'
+            ? 'Speculative outlooks on themes (Photonics, Robotics, Energy…) or single stocks — the forward-looking counterpart to the evidence-led research notes. Every theme maps its picks-and-shovels layer: the toolmakers and suppliers that get paid whichever player wins. Blends live data with the model’s general knowledge; speculation is labelled as such.'
             : 'Full research note on any US-listed stock — fundamentals trajectory and earnings quality from SEC filings, derived valuation multiples, price action vs SPY, analyst consensus, news flow, 13F positioning, and insider activity, synthesised into an evidence-led view.'}
         </p>
       </div>

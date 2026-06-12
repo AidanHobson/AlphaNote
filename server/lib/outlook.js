@@ -35,8 +35,11 @@ What has changed recently (technology, cost curves, policy, demand) that puts th
 **Value chain**
 Bullets mapping the sub-segments (e.g. components → systems → applications) and where the economic leverage likely sits.
 
+**Picks & shovels**
+The enabling layer: the toolmakers, test and measurement houses, equipment, components, and materials suppliers that get paid regardless of which application-layer player wins — the classic picks-and-shovels thesis (e.g. semiconductor test-probe makers like Technoprobe, or wafer-level test systems like Aehr: the testers earn whichever chipmaker takes the crown). Name the strongest public candidates for THIS theme (general knowledge — may be stale), explain why their economics capture the theme's growth with less winner-picking risk, and flag the classic caveats: capex cyclicality, customer concentration, and that a consensus "enabler" trade can itself get crowded.
+
 **Public-market exposure**
-5-8 bullets: ticker (exchange), one-line role in the theme, and whether it is a pure-play or a diversified company with theme exposure. State plainly that this list comes from general knowledge — it may be stale or incomplete, and tickers should be verified in the Research tab before acting.
+5-8 bullets: ticker (exchange), one-line role in the theme, and a tag — pure-play, diversified, or picks-and-shovels enabler. State plainly that this list comes from general knowledge — it may be stale or incomplete, and tickers should be verified in the Research tab before acting.
 
 **Bull case**
 What the theme looks like if it works: adoption path, who wins, rough order-of-magnitude prize (labelled as estimate).
@@ -61,7 +64,7 @@ ${SHARED_RAILS}
 Write the outlook in exactly this structure:
 
 **Setup**
-Two or three sentences anchored to the live data: where the stock and valuation stand today.
+Two or three sentences anchored to the live data: where the stock and valuation stand today. Classify the business: is this a picks-and-shovels enabler (it sells the tools, tests, equipment, or infrastructure an industry needs, and gets paid whichever player wins — e.g. Technoprobe in semiconductor test, Aehr in wafer-level test) or an end-market bet on a winner? Let that classification shape the rest of the note: enablers trade winner-picking risk for capex cyclicality and customer concentration.
 
 **The dream**
 What the most ambitious credible bulls believe: optionality not yet in the numbers, new markets, platform effects. Label which parts are general knowledge and which are speculation.

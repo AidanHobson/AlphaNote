@@ -3,9 +3,19 @@ import { THEME_PROMPT, STOCK_OUTLOOK_PROMPT, buildThemePrompt, buildStockOutlook
 
 describe('outlook system prompts', () => {
   it('theme prompt has the speculative structure', () => {
-    for (const s of ['**The theme**', '**Why now**', '**Value chain**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
+    for (const s of ['**The theme**', '**Why now**', '**Value chain**', '**Picks & shovels**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
       expect(THEME_PROMPT).toContain(s);
     }
+  });
+  it('theme prompt frames the picks-and-shovels thesis with its caveats', () => {
+    expect(THEME_PROMPT).toContain('get paid regardless of which application-layer player wins');
+    expect(THEME_PROMPT).toContain('Technoprobe');
+    expect(THEME_PROMPT).toContain('Aehr');
+    expect(THEME_PROMPT).toContain('capex cyclicality, customer concentration');
+  });
+  it('stock prompt asks for the enabler vs end-market classification', () => {
+    expect(STOCK_OUTLOOK_PROMPT).toContain('picks-and-shovels enabler');
+    expect(STOCK_OUTLOOK_PROMPT).toContain('winner-picking risk for capex cyclicality');
   });
   it('stock prompt has the dream/nightmare structure', () => {
     for (const s of ['**Setup**', '**The dream**', '**The nightmare**', '**Asymmetry**', '**Signposts**']) {
