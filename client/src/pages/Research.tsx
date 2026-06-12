@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getJSON, postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote, BuzzBoard } from '../lib/models';
+import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief } from '../lib/models';
 import AIText from '../components/AIText';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
@@ -22,11 +22,23 @@ export default function Research() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [buzz, setBuzz] = useState<BuzzBoard | null>(null);
+  const [brief, setBrief] = useState<BuzzBrief | null>(null);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefError, setBriefError] = useState('');
 
   // Load the Reddit buzz board once, the first time the outlook tab opens.
   useEffect(() => {
     if (isOutlook && !buzz) getJSON<BuzzBoard>('/api/social/buzz').then(setBuzz).catch(() => {});
   }, [isOutlook, buzz]);
+
+  const runBrief = (force = false) => {
+    if (briefBusy) return;
+    setBriefBusy(true); setBriefError('');
+    postJSON<BuzzBrief>('/api/ai/buzz-brief', { force })
+      .then(setBrief)
+      .catch((e) => setBriefError(e.message))
+      .finally(() => setBriefBusy(false));
+  };
 
   const run = (raw: string, force = false) => {
     const topic = raw.trim();
@@ -175,35 +187,80 @@ export default function Research() {
 
       {isOutlook && (
         buzz?.available && buzz.items.length ? (
-          <Card
-            title="Trending on Reddit"
-            sub={`${buzz.subreddits.join(' · ')} — ${buzz.window} (${buzz.postsScanned} posts scanned) · click a ticker for its outlook`}
-            style={{ marginTop: 16 }}
-          >
-            <table className="mtable">
-              <thead><tr><th>#</th><th>Ticker</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Engagement</th></tr></thead>
-              <tbody>
-                {buzz.items.slice(0, 12).map((b, i) => (
-                  <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
-                    onClick={() => !loading && run(b.symbol)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !loading) run(b.symbol); }}>
-                    <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{b.symbol}</td>
-                    <td>
-                      {b.topPost && (
-                        <>
-                          <div style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.topPost.title}</div>
-                          <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{b.topPost.subreddit} · {b.topPost.score.toLocaleString()} upvotes · {b.topPost.comments.toLocaleString()} comments</div>
-                        </>
-                      )}
-                    </td>
-                    <td className="num">{b.mentions}</td>
-                    <td className="num">{b.engagement.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          <>
+            {briefError && <div className="error-banner" style={{ marginTop: 16 }}>{briefError}</div>}
+            {(brief || briefBusy) && (
+              <div className="ai-panel" style={{ marginTop: 16 }}>
+                <div className="ai-head">
+                  <span className="spark">✦</span>
+                  <h3>Retail Pulse</h3>
+                  <span className="badge flat">SPECULATIVE</span>
+                  {brief && <span className="pill accent" style={{ marginLeft: 'auto' }}>{providerLabel(brief.provider)}</span>}
+                  {brief && (
+                    <button className="icon-btn" style={{ width: 30, height: 30, marginLeft: 8 }} title="Regenerate"
+                      onClick={() => runBrief(true)} disabled={briefBusy}>↻</button>
+                  )}
+                </div>
+                <div className="ai-body" style={{ opacity: briefBusy ? 0.5 : 1 }}>
+                  {brief ? <AIText text={brief.text} /> : <SkeletonLines lines={8} />}
+                </div>
+                {brief && (
+                  <div className="ai-foot">
+                    AI-generated read of the board below · {providerLabel(brief.provider)} · attention data, not fundamentals · not investment advice
+                  </div>
+                )}
+              </div>
+            )}
+            <Card
+              title="Trending on Reddit"
+              sub={`${buzz.subreddits.join(' · ')} — ${buzz.window} (${buzz.postsScanned} posts scanned) · click a ticker for its outlook`}
+              style={{ marginTop: 16 }}
+              right={!brief && !briefBusy
+                ? <button className="btn sm primary" onClick={() => runBrief()}>✦ Retail Pulse</button>
+                : undefined}
+            >
+              <table className="mtable">
+                <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th></tr></thead>
+                <tbody>
+                  {buzz.items.slice(0, 12).map((b, i) => (
+                    <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
+                      onClick={() => !loading && run(b.symbol)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !loading) run(b.symbol); }}>
+                      <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+                        {b.symbol}{b.rising ? <span title="Accelerating in today's scan"> 🔥</span> : null}
+                        {b.name && b.name !== b.symbol && <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5, fontWeight: 400 }}>{b.name}</div>}
+                      </td>
+                      <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                        {b.quote
+                          ? <>
+                              {b.quote.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                              <span className={b.quote.changePercent >= 0 ? 'badge up' : 'badge down'} style={{ marginLeft: 6 }}>
+                                {b.quote.changePercent >= 0 ? '+' : ''}{b.quote.changePercent.toFixed(2)}%
+                              </span>
+                            </>
+                          : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                      </td>
+                      <td>
+                        {b.topPost && (
+                          <>
+                            <div style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.topPost.title}</div>
+                            <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
+                              {b.topPost.subreddit} · {b.topPost.score.toLocaleString()} upvotes · {b.topPost.comments.toLocaleString()} comments
+                              {(b.posts?.length ?? 0) > 1 ? ` · +${b.posts!.length - 1} more thread${b.posts!.length > 2 ? 's' : ''}` : ''}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td className="num">{b.mentions}</td>
+                      <td className="num">{b.today?.mentions || 0}</td>
+                      <td className="num">{b.engagement.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          </>
         ) : !active && !loading && !error ? (
           <div className="empty">
             {buzz && !buzz.available

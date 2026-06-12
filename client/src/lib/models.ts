@@ -109,13 +109,19 @@ export interface OutlookNote {
     social?: string[]; buzz?: { rank: number; mentions: number };
   };
 }
+export interface BuzzPost { title: string; subreddit: string; score: number; comments: number }
 export interface BuzzItem {
   symbol: string; mentions: number; engagement: number; subreddits: string[];
-  topPost: { title: string; subreddit: string; score: number; comments: number } | null;
+  topPost: BuzzPost | null; posts?: BuzzPost[];
+  today?: { mentions: number; engagement: number }; rising?: boolean;
+  name?: string; quote?: { price: number; changePercent: number };
 }
 export interface BuzzBoard {
   generatedAt: string; window: string; subreddits: string[]; postsScanned: number;
   available: boolean; reason?: string; items: BuzzItem[];
+}
+export interface BuzzBrief {
+  provider: string; fellBack: boolean; text: string; generatedAt: string; boardGeneratedAt: string; cached: boolean;
 }
 export interface ResearchNote {
   symbol: string; provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;

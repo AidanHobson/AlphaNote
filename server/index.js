@@ -10,7 +10,7 @@ import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } 
 import { generateStockInsight } from './lib/insight.js';
 import { generateResearchNote } from './lib/research.js';
 import { generateOutlook } from './lib/outlook.js';
-import { getRedditBuzz } from './lib/buzz.js';
+import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -314,6 +314,23 @@ app.get('/api/history/:symbol', wrap(async (req, res) => {
 // ── Reddit buzz: trending tickers across finance subreddits (keyless) ────────
 app.get('/api/social/buzz', wrap(async (req, res) => {
   res.json(await getRedditBuzz());
+}));
+
+// AI synthesis of the buzz board ("Retail Pulse"). Cached per board snapshot.
+app.post('/api/ai/buzz-brief', aiLimiter, wrap(async (req, res) => {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI briefs unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await generateBuzzBrief({ force: req.body?.force === true }));
+  } catch (err) {
+    const status = err.statusCode || 502;
+    console.error('buzz-brief failed:', err.message);
+    recordError('buzz-brief', err, { path: req.path });
+    res.status(status).json({
+      error: status === 503 ? err.message : 'The AI providers could not generate the Retail Pulse right now. Please try again.',
+    });
+  }
 }));
 
 app.get('/api/smartmoney', (req, res) => res.json({ managers: listManagers() }));

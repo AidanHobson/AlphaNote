@@ -7,8 +7,10 @@
 
 import { fetchText, parseShredditPosts } from './social.js';
 import { tickerUniverse } from './fundamentals.js';
+import { getWatchlistData } from './finnhub.js';
+import { callAIWithFallback } from './ai-provider.js';
 
-export const BUZZ_SUBS = ['wallstreetbets', 'stocks', 'StockMarket', 'options', 'investing'];
+export const BUZZ_SUBS = ['wallstreetbets', 'stocks', 'StockMarket', 'options', 'investing', 'pennystocks', 'Shortsqueeze'];
 
 // Uppercase tokens that collide with real tickers but almost always mean the
 // English word / finance slang in a Reddit title. A $cashtag bypasses this.
@@ -43,33 +45,68 @@ export function aggregateBuzz(posts, universe) {
   for (const p of posts) {
     const engagement = (p.score || 0) + (p.comments || 0);
     for (const symbol of extractTickers(p.title, universe)) {
-      const e = by.get(symbol) || { symbol, mentions: 0, engagement: 0, subreddits: new Set(), topPost: null };
+      const e = by.get(symbol) || { symbol, mentions: 0, engagement: 0, subreddits: new Set(), posts: [] };
       e.mentions += 1;
       e.engagement += engagement;
       if (p.subreddit) e.subreddits.add(p.subreddit);
-      if (!e.topPost || engagement > e.topPost.score + e.topPost.comments) {
-        e.topPost = { title: p.title, subreddit: p.subreddit, score: p.score || 0, comments: p.comments || 0 };
-      }
+      e.posts.push({ title: p.title, subreddit: p.subreddit, score: p.score || 0, comments: p.comments || 0 });
       by.set(symbol, e);
     }
   }
   return [...by.values()]
-    .map((e) => ({ ...e, subreddits: [...e.subreddits] }))
+    .map((e) => {
+      // Keep the 3 most-engaged threads; topPost stays as the headline one.
+      const posts = e.posts.sort((a, b) => (b.score + b.comments) - (a.score + a.comments)).slice(0, 3);
+      return { ...e, subreddits: [...e.subreddits], posts, topPost: posts[0] || null };
+    })
     .sort((a, b) => (b.mentions - a.mentions) || (b.engagement - a.engagement));
+}
+
+// Overlay today's scan onto the weekly board: per-symbol today counts plus a
+// "rising" flag when a name is drawing real attention right now.
+export function mergeTodaySignal(weekItems, dayItems) {
+  const today = new Map(dayItems.map((d) => [d.symbol, d]));
+  return weekItems.map((w) => {
+    const d = today.get(w.symbol);
+    const t = { mentions: d?.mentions || 0, engagement: d?.engagement || 0 };
+    return { ...w, today: t, rising: t.mentions >= 2 || (t.mentions >= 1 && t.engagement >= 500) };
+  });
 }
 
 let cache = { t: 0, data: null };
 const TTL = 45 * 60_000;
 
+const fetchSubPosts = (sub, range) =>
+  fetchText(`https://www.reddit.com/svc/shreddit/community-more-posts/top/?name=${encodeURIComponent(sub)}&t=${range}`)
+    .then((html) => parseShredditPosts(html).map((p) => ({ ...p, subreddit: p.subreddit || `r/${sub}` })))
+    .catch(() => []);
+
 export async function getRedditBuzz({ force = false } = {}) {
   if (!force && cache.data && Date.now() - cache.t < TTL) return cache.data;
 
   const universe = await tickerUniverse();
-  const lists = await Promise.all(BUZZ_SUBS.map((sub) =>
-    fetchText(`https://www.reddit.com/svc/shreddit/community-more-posts/top/?name=${encodeURIComponent(sub)}&t=week`)
-      .then((html) => parseShredditPosts(html).map((p) => ({ ...p, subreddit: p.subreddit || `r/${sub}` })))
-      .catch(() => [])));
-  const posts = lists.flat();
+  // Week scan ranks the board; day scan provides the "rising right now" overlay.
+  const [weekLists, dayLists] = await Promise.all([
+    Promise.all(BUZZ_SUBS.map((sub) => fetchSubPosts(sub, 'week'))),
+    Promise.all(BUZZ_SUBS.map((sub) => fetchSubPosts(sub, 'day'))),
+  ]);
+  const posts = weekLists.flat();
+  const items = mergeTodaySignal(
+    aggregateBuzz(posts, universe).slice(0, 15),
+    aggregateBuzz(dayLists.flat(), universe),
+  );
+
+  // Best-effort price enrichment for the top names (Finnhub; zeros under 429
+  // are dropped so the UI shows "—" rather than a fake $0.00).
+  try {
+    const top = items.slice(0, 8).map((i) => i.symbol);
+    const quotes = await getWatchlistData(top);
+    const bySym = new Map(quotes.filter((q) => q && q.price > 0).map((q) => [q.symbol, q]));
+    for (const item of items) {
+      const q = bySym.get(item.symbol);
+      if (q) { item.name = q.name; item.quote = { price: q.price, changePercent: q.changePercent }; }
+    }
+  } catch { /* enrichment is optional */ }
 
   const data = {
     generatedAt: new Date().toISOString(),
@@ -78,8 +115,58 @@ export async function getRedditBuzz({ force = false } = {}) {
     postsScanned: posts.length,
     available: posts.length > 0,
     reason: posts.length ? undefined : 'Reddit listings unreachable from this server right now.',
-    items: aggregateBuzz(posts, universe).slice(0, 15),
+    items,
   };
   if (posts.length) cache = { t: Date.now(), data };
   return data;
+}
+
+// ── Retail pulse brief: AI synthesis of the whole board ───────────────────────
+export const BRIEF_PROMPT = `You are AlphaNote's retail-flow strategist. You write a short, SPECULATIVE "Retail Pulse" read of what retail traders on Reddit's finance subreddits are concentrated in right now, using ONLY the board data provided.
+
+Rails:
+- The data is thread TITLES and engagement counts — attention and positioning signal, not fundamentals. Do not infer business performance from it.
+- You may add brief general-knowledge context on what a name does, labelled as such; your knowledge has a training cutoff.
+- No personalised investment advice, no position sizing. Attention cuts both ways — crowded longs are fragile.
+- Plain text; section titles as bold lines; bullets start with "- ". Keep it under 350 words.
+
+Structure:
+**Where the crowd is**
+Two or three bullets on the dominant names/clusters and what the thread titles suggest the crowd's thesis is.
+
+**Rising today**
+Which names are accelerating in today's scan vs the weekly board (if none stand out, say so).
+
+**Contrarian read**
+One or two bullets: where the attention looks crowded or late, and what the bears among the threads are saying if visible.
+
+A final line starting with "Bottom line:" — the one thing worth taking from this board, with the reminder that this is speculative attention data, not advice.`;
+
+export function buildBriefPrompt(board) {
+  const lines = [`Reddit retail attention board (${board.window}; subreddits: ${board.subreddits.join(', ')}; ${board.postsScanned} posts scanned; generated ${board.generatedAt.slice(0, 16)}Z):`];
+  board.items.slice(0, 10).forEach((i, n) => {
+    const px = i.quote ? ` | price ${i.quote.price} (${i.quote.changePercent >= 0 ? '+' : ''}${Number(i.quote.changePercent).toFixed(2)}% today)` : '';
+    lines.push(`#${n + 1} ${i.symbol}${i.name ? ` (${i.name})` : ''} — ${i.mentions} mentions, ${i.engagement.toLocaleString('en-US')} engagement this week; today: ${i.today?.mentions || 0} mentions${i.rising ? ' (RISING)' : ''}${px}`);
+    for (const p of i.posts || []) lines.push(`   · "${p.title}" (${p.subreddit}, ${p.score} upvotes, ${p.comments} comments)`);
+  });
+  lines.push('');
+  lines.push('Write the Retail Pulse brief now using ONLY the board above.');
+  return lines.join('\n');
+}
+
+let briefCache = { key: '', note: null };
+
+export async function generateBuzzBrief({ force = false } = {}) {
+  const board = await getRedditBuzz();
+  if (!board.available || !board.items.length) {
+    throw Object.assign(new Error('The Reddit board is unavailable right now.'), { statusCode: 503 });
+  }
+  // One brief per board snapshot — regenerating without new data is waste.
+  if (!force && briefCache.note && briefCache.key === board.generatedAt) {
+    return { ...briefCache.note, cached: true };
+  }
+  const { provider, text, fellBack } = await callAIWithFallback(buildBriefPrompt(board), BRIEF_PROMPT, { maxTokens: 1100 });
+  const note = { provider, fellBack, text, generatedAt: new Date().toISOString(), boardGeneratedAt: board.generatedAt };
+  briefCache = { key: board.generatedAt, note };
+  return { ...note, cached: false };
 }
