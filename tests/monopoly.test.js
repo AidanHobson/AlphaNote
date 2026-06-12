@@ -16,6 +16,9 @@ describe('MONOPOLY_PROMPT (per-ticker profile)', () => {
     expect(MONOPOLY_PROMPT).toContain('probability-weighted');
     expect(MONOPOLY_PROMPT).toContain('sum to 100%');
   });
+  it('scenarios are a markdown table per the mandate', () => {
+    expect(MONOPOLY_PROMPT).toContain('| Scenario | Probability | Key assumption | Implied move (derived) |');
+  });
   it('keeps the fact rails: layered claims, unproven-moat honesty, no advice', () => {
     expect(MONOPOLY_PROMPT).toContain('Never present one as another');
     expect(MONOPOLY_PROMPT).toContain('classify the moat as unproven');

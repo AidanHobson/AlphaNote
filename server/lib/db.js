@@ -57,6 +57,20 @@ db.exec(`
     path    TEXT,
     status  INTEGER
   );
+  CREATE TABLE IF NOT EXISTS research_notes (
+    id         INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    kind       TEXT NOT NULL,
+    topic      TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    provider   TEXT,
+    conviction INTEGER,
+    text       TEXT NOT NULL,
+    meta       TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_research_notes_user ON research_notes(user_id, created_at);
 `);
 
 // Migration: add users.status to databases created before the approval flow.

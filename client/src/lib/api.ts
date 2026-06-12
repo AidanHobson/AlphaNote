@@ -17,6 +17,9 @@ export async function postJSON<T>(path: string, body: unknown): Promise<T> {
 export async function putJSON<T>(path: string, body: unknown): Promise<T> {
   return sendJSON<T>('PUT', path, body);
 }
+export async function deleteJSON<T>(path: string): Promise<T> {
+  return sendJSON<T>('DELETE', path, undefined);
+}
 
 async function sendJSON<T>(method: string, path: string, body: unknown): Promise<T> {
   let res: Response;

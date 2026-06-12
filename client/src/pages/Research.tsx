@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from 'react';
-import { getJSON, postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote, MonopolyNote, MonopolyRadarNote } from '../lib/models';
+import { deleteJSON, getJSON, postJSON } from '../lib/api';
+import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote, MonopolyNote, MonopolyRadarNote, HistoryNote } from '../lib/models';
 import AIText from '../components/AIText';
 import Tabs from '../components/Tabs';
 import { SkeletonLines } from '../components/Skeleton';
@@ -9,6 +9,7 @@ import PredictionsCard from '../components/PredictionsCard';
 import RetailPulsePanel from '../components/RetailPulsePanel';
 import ThemeRadarPanel from '../components/ThemeRadarPanel';
 import MonopolyRadarPanel from '../components/MonopolyRadarPanel';
+import MyResearch from '../components/MyResearch';
 import { onStorageChange } from '../lib/storage';
 import { providerLabel } from '../lib/format';
 
@@ -39,6 +40,7 @@ export default function Research() {
   const [monoRadarError, setMonoRadarError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [historyBump, setHistoryBump] = useState(0);
 
   const [buzz, setBuzz] = useState<BuzzBoard | null>(null);
   const [predictions, setPredictions] = useState<PredictionsBoard | null>(null);
@@ -66,19 +68,19 @@ export default function Research() {
     if (isMonopoly) {
       if (!force) setMonopoly(null);
       postJSON<MonopolyNote>('/api/ai/monopoly', { topic: topic.toUpperCase(), force })
-        .then(setMonopoly)
+        .then((n) => { setMonopoly(n); setHistoryBump((x) => x + 1); })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     } else if (isOutlook) {
       if (!force) setOutlook(null);
       postJSON<OutlookNote>('/api/ai/outlook', { topic, force })
-        .then(setOutlook)
+        .then((n) => { setOutlook(n); setHistoryBump((x) => x + 1); })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     } else {
       if (!force) setNote(null);
       postJSON<ResearchNote>('/api/ai/research', { symbol: topic.toUpperCase(), force })
-        .then(setNote)
+        .then((n) => { setNote(n); setHistoryBump((x) => x + 1); })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }
@@ -90,7 +92,7 @@ export default function Research() {
     setMode(MODES[0]);
     setInput(symbol); setLoading(true); setError(''); setNote(null);
     postJSON<ResearchNote>('/api/ai/research', { symbol })
-      .then(setNote)
+      .then((n) => { setNote(n); setHistoryBump((x) => x + 1); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -120,6 +122,21 @@ export default function Research() {
       .then(setMonoRadar)
       .catch((e) => setMonoRadarError(e.message))
       .finally(() => setMonoRadarBusy(false));
+  };
+
+  // Reopen a saved note: the meta column holds the original response, so the
+  // view restores exactly as generated (and switches to the right tab).
+  const restoreNote = (id: number) => {
+    getJSON<HistoryNote>(`/api/notes/history/${id}`)
+      .then((n) => {
+        setError('');
+        if (n.kind === 'monopoly') { setMode(MODES[2]); setMonopoly(n.meta as MonopolyNote); }
+        else if (n.kind === 'outlook') { setMode(MODES[1]); setOutlook(n.meta as OutlookNote); }
+        else { setMode(MODES[0]); setNote(n.meta as ResearchNote); }
+        setInput(n.topic);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      })
+      .catch((e) => setError(e.message));
   };
 
   const pills = isMonopoly ? MONOPOLY_PILLS : isOutlook ? OUTLOOK_PILLS : RESEARCH_PILLS;
@@ -327,6 +344,12 @@ export default function Research() {
           </div>
         ) : null
       )}
+
+      <MyResearch
+        refreshKey={historyBump}
+        onRestore={restoreNote}
+        onDelete={(id) => deleteJSON<{ ok: boolean }>(`/api/notes/history/${id}`).then((r) => r.ok).catch(() => false)}
+      />
     </div>
   );
 }

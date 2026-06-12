@@ -14,6 +14,7 @@ import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { getMarketPredictions } from './lib/predictions.js';
 import { generateThemeRadar } from './lib/radar.js';
 import { generateMonopolyNote, generateMonopolyRadar } from './lib/monopoly.js';
+import { notesHistory } from './lib/notes-history.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -314,6 +315,19 @@ app.get('/api/history/:symbol', wrap(async (req, res) => {
 }));
 
 // ── Smart Money (EDGAR 13F institutional holdings, curated managers) ──────────
+// ── My research: per-user history of generated AI notes ──────────────────────
+app.get('/api/notes/history', (req, res) => {
+  res.json({ notes: notesHistory.list(req.user.id) });
+});
+app.get('/api/notes/history/:id', (req, res) => {
+  const note = notesHistory.get(req.user.id, req.params.id);
+  if (!note) return res.status(404).json({ error: 'Note not found.' });
+  res.json(note);
+});
+app.delete('/api/notes/history/:id', (req, res) => {
+  res.json({ ok: notesHistory.delete(req.user.id, req.params.id) });
+});
+
 // ── Reddit buzz: trending tickers across finance subreddits (keyless) ────────
 app.get('/api/social/buzz', wrap(async (req, res) => {
   res.json(await getRedditBuzz());
@@ -330,7 +344,9 @@ app.post('/api/ai/monopoly', aiLimiter, wrap(async (req, res) => {
     return res.status(503).json({ error: 'AI research unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateMonopolyNote(req.body?.topic, { force: req.body?.force === true }));
+    const note = await generateMonopolyNote(req.body?.topic, { force: req.body?.force === true });
+    if (!note.cached) notesHistory.save(req.user.id, { kind: 'monopoly', topic: note.topic, title: `${note.data.name} (${note.topic})`, provider: note.provider, text: note.text, meta: note });
+    res.json(note);
   } catch (err) {
     const status = err.statusCode || 502;
     console.error('monopoly failed:', err.message);
@@ -447,7 +463,9 @@ app.post('/api/ai/research', aiLimiter, wrap(async (req, res) => {
   }
   try {
     // generateResearchNote caches per symbol for 1h itself; force regenerates.
-    res.json(await generateResearchNote(symbol, { force: req.body?.force === true }));
+    const note = await generateResearchNote(symbol, { force: req.body?.force === true });
+    if (!note.cached) notesHistory.save(req.user.id, { kind: 'research', topic: note.symbol, title: `${note.data.name} (${note.symbol})`, provider: note.provider, text: note.text, meta: note });
+    res.json(note);
   } catch (err) {
     const status = err.statusCode || 502;
     console.error('research failed:', err.message);
@@ -466,7 +484,9 @@ app.post('/api/ai/outlook', aiLimiter, wrap(async (req, res) => {
     return res.status(503).json({ error: 'AI outlooks unavailable: no AI provider key configured.' });
   }
   try {
-    res.json(await generateOutlook(topic, { force: req.body?.force === true }));
+    const note = await generateOutlook(topic, { force: req.body?.force === true });
+    if (!note.cached) notesHistory.save(req.user.id, { kind: 'outlook', topic: note.topic, title: note.mode === 'stock' ? `${note.data.name} (${note.topic.toUpperCase()})` : note.topic, provider: note.provider, text: note.text, meta: note });
+    res.json(note);
   } catch (err) {
     const status = err.statusCode || 502;
     console.error('outlook failed:', err.message);

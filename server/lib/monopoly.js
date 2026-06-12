@@ -61,7 +61,8 @@ Moat-extension optionality: adjacencies this position could monopolise next, und
 What breaks the monopoly (technological, geopolitical, regulatory), with an explicit probability bucket and timeline (e.g. "low risk, 10+ years" / "moderate, 3-5 years if [trigger]").
 
 **Scenarios**
-Three bullets — Bull, Base, Bear — each with: your probability estimate (they must sum to 100%), the key assumption, and the implied direction/magnitude anchored to the derived multiples (labelled derived, ranges not point targets). Close the section with one line: the probability-weighted balance of the three.
+A markdown table with exactly this header: | Scenario | Probability | Key assumption | Implied move (derived) |
+One row each for Bull, Base, Bear: your probability estimates (they must sum to 100%), the key assumption in a short phrase, and the implied direction/magnitude anchored to the derived multiples (labelled derived, ranges not point targets). After the table, one line: the probability-weighted balance of the three.
 
 **Catalysts & watch list**
 Concrete dated or watchable events: the next earnings date when provided, licence renewals, regulatory decisions, contract awards. Label which are from live data vs general knowledge.

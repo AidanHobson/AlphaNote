@@ -126,6 +126,13 @@ export interface BuzzBoard {
 export interface BuzzBrief {
   provider: string; fellBack: boolean; text: string; generatedAt: string; boardGeneratedAt: string; cached: boolean;
 }
+export interface HistoryItem {
+  id: number; kind: 'research' | 'outlook' | 'monopoly'; topic: string; title: string;
+  provider: string | null; conviction: number | null; created_at: number;
+}
+export interface HistoryNote extends HistoryItem {
+  text: string; meta: unknown;
+}
 export interface MonopolyNote {
   topic: string; kind: 'monopoly'; speculative: true;
   provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;
