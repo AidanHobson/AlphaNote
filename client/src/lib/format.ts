@@ -38,3 +38,6 @@ export function timeAgo(unixSeconds: number): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
+
+export const providerLabel = (p: string): string =>
+  ({ claude: 'Claude (Anthropic)', gemini: 'Gemini (Google)' } as Record<string, string>)[p] || p;

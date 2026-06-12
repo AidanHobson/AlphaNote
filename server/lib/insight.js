@@ -6,7 +6,7 @@ import { getQuote, getCompanyProfile, getNews } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { getAnalystRatings } from './analyst.js';
 import { getFundamentals } from './fundamentals.js';
-import { formatMarketCapValue } from './utils.js';
+import { formatMarketCapValue, fmtUsd } from './utils.js';
 
 export const SYSTEM_PROMPT = `You are AlphaNote's senior equity research analyst. You write tight, evidence-led stock briefs for a markets-research dashboard, using ONLY the data provided.
 
@@ -27,14 +27,6 @@ Respond in exactly this structure:
    - The key risk visible in the data (only if one is actually visible).
 3) A final line starting with "Bottom line:" — one sentence on what a researcher should dig into next (research direction, not advice).`;
 
-// Compact dollar formatting for prompt lines ($12.00B style); EPS stays raw.
-// formatMarketCapValue rejects non-positive values, so carry the sign ourselves
-// (net income/OCF can be negative for loss-making companies).
-const fmtUsd = (v) => {
-  if (v == null) return null;
-  const sign = v < 0 ? '-' : '';
-  return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `$${v}`;
-};
 
 export function buildPrompt({ symbol, quote, profile, news, ratings, fundamentals }) {
   const lines = [];

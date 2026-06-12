@@ -14,7 +14,7 @@ import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
 import { shortVolFor } from './shortvol.js';
 import { callAIWithFallback } from './ai-provider.js';
-import { formatMarketCapValue, boundedSet } from './utils.js';
+import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
 const SHARED_RAILS = `Rails (these still apply even though this note is speculative):
 - Distinguish three layers explicitly: (1) live data provided in the input, (2) general knowledge you are confident in, (3) informed speculation — never present one as another.
@@ -90,12 +90,6 @@ Concrete, watchable indicators that the dream or the nightmare is starting to pl
 A final line starting with "Bottom line:" — your speculative stance with a conviction score out of 5 and a time horizon. This is speculative analysis, not investment advice.
 
 Keep the whole note under 550 words.`;
-
-const fmtUsd = (v) => {
-  if (v == null) return null;
-  const sign = v < 0 ? '-' : '';
-  return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `${sign}$${Math.abs(v).toLocaleString('en-US')}`;
-};
 
 export function buildThemePrompt(topic, pulse) {
   const lines = [

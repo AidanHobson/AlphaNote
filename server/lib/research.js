@@ -10,7 +10,7 @@ import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
 import { callAIWithFallback } from './ai-provider.js';
-import { formatMarketCapValue, boundedSet } from './utils.js';
+import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
 export const SYSTEM_PROMPT = `You are AlphaNote's senior equity research analyst writing a full research note for a markets-research dashboard, using ONLY the data provided.
 
@@ -47,11 +47,6 @@ Bottom line: one sentence with your analytical view and a conviction score out o
 
 Keep the whole note under 550 words.`;
 
-const fmtUsd = (v) => {
-  if (v == null) return null;
-  const sign = v < 0 ? '-' : '';
-  return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `${sign}$${Math.abs(v).toLocaleString('en-US')}`;
-};
 
 // Multiples computed server-side from market cap + EDGAR TTM figures, so the
 // note's valuation section works with real numbers instead of hoping the model

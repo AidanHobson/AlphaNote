@@ -40,3 +40,11 @@ export function formatMarketCapValue(marketCapUsd) {
   if (marketCapUsd >= 1e6) return `$${(marketCapUsd / 1e6).toFixed(2)}M`;
   return `$${marketCapUsd.toFixed(2)}`;
 }
+
+// Signed compact dollars for prompt/text output: -$120.00M, $12.00B, $95,000.
+// formatMarketCapValue rejects non-positive values, so the sign is carried here.
+export const fmtUsd = (v) => {
+  if (v == null) return null;
+  const sign = v < 0 ? '-' : '';
+  return Math.abs(v) >= 1e6 ? `${sign}${formatMarketCapValue(Math.abs(v))}` : `${sign}$${Math.abs(v).toLocaleString('en-US')}`;
+};
