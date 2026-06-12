@@ -89,21 +89,105 @@ async function polymarket(topic) {
   return { source: 'Polymarket', count: events.length, items: events.slice(0, 6) };
 }
 
-// ── Reddit (best-effort; usually 403 from datacenter IPs) ─────────────────────
-async function reddit(topic) {
+// ── Reddit — tiered like the last30days skill ────────────────────────────────
+// Tier 0: the legacy .json search (403s from most datacenter IPs, but free to try).
+// Tier 1: RSS search for discovery + shreddit /svc listing partials for real
+// upvote scores — the keyless path Reddit still serves where .json is blocked.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+
+async function fetchText(url, { timeout = 9000 } = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const qs = new URLSearchParams({ q: topic, sort: 'top', t: 'month', limit: '8' });
-    const data = await fetchJSON(`https://www.reddit.com/search.json?${qs}`, { headers: { Accept: 'application/json' } });
-    const posts = (data?.data?.children || [])
-      .map((c) => c.data)
-      .filter((p) => p && p.title)
-      .map((p) => ({ title: p.title, subreddit: p.subreddit_name_prefixed || `r/${p.subreddit}`, score: p.score || 0, comments: p.num_comments || 0 }))
-      .sort((a, b) => (b.score + b.comments) - (a.score + a.comments));
-    if (!posts.length) return null;
-    return { source: 'Reddit', count: posts.length, items: posts.slice(0, 6) };
-  } catch {
-    return null; // 403 / rate-limited — silently skip, the skill expects this
+    const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA, Accept: '*/*' }, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(t);
   }
+}
+
+const decodeEntities = (s) => String(s)
+  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
+const postIdFrom = (url) => /\/comments\/([a-z0-9]+)/i.exec(String(url))?.[1] || null;
+
+// Atom entries from /search.rss — only real posts (links containing /comments/).
+export function parseRedditRss(xml) {
+  const posts = [];
+  for (const [, entry] of String(xml).matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const link = /<link href="([^"]*)"/.exec(entry)?.[1] || '';
+    if (!link.includes('/comments/')) continue; // subreddit/user suggestions, not posts
+    const title = /<title>([\s\S]*?)<\/title>/.exec(entry)?.[1] || '';
+    const updated = /<updated>([^<]*)<\/updated>/.exec(entry)?.[1] || '';
+    const sub = /reddit\.com\/(r\/[^/]+)\//.exec(link)?.[1] || '';
+    posts.push({
+      title: decodeEntities(title.trim()),
+      url: link,
+      postId: postIdFrom(link),
+      subreddit: sub,
+      date: updated.slice(0, 10),
+    });
+  }
+  return posts;
+}
+
+// shreddit listing partial → real scores, keyed by post id.
+export function parseShredditListing(html) {
+  const scores = new Map();
+  for (const [, attrs] of String(html).matchAll(/<shreddit-post\b([^>]*)>/g)) {
+    const attr = (name) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
+    const id = postIdFrom(attr('permalink'));
+    if (!id || scores.has(id)) continue;
+    scores.set(id, { score: Number(attr('score')) || 0, comments: Number(attr('comment-count')) || 0 });
+  }
+  return scores;
+}
+
+async function redditJson(topic) {
+  const qs = new URLSearchParams({ q: topic, sort: 'top', t: 'month', limit: '8' });
+  const data = await fetchJSON(`https://www.reddit.com/search.json?${qs}`, { headers: { Accept: 'application/json' } });
+  return (data?.data?.children || [])
+    .map((c) => c.data)
+    .filter((p) => p && p.title)
+    .map((p) => ({ title: p.title, subreddit: p.subreddit_name_prefixed || `r/${p.subreddit}`, score: p.score || 0, comments: p.num_comments || 0 }));
+}
+
+async function redditRssWithScores(topic) {
+  const qs = new URLSearchParams({ q: topic, sort: 'relevance', t: 'month' });
+  const xml = await fetchText(`https://www.reddit.com/search.rss?${qs}`);
+  const cutoff = new Date(Date.now() - 30 * DAY * 1000).toISOString().slice(0, 10);
+  const posts = parseRedditRss(xml).filter((p) => p.date >= cutoff);
+  if (!posts.length) return [];
+
+  // Backfill real scores from the top 2 subreddits' listing partials (skill's
+  // score-only backfill — listings are never merged in as discovery).
+  const counts = new Map();
+  for (const p of posts) counts.set(p.subreddit, (counts.get(p.subreddit) || 0) + 1);
+  const topSubs = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
+    .map(([sub]) => sub.replace(/^r\//, '')).filter(Boolean);
+  const scoreMaps = await Promise.all(topSubs.map((sub) =>
+    fetchText(`https://www.reddit.com/svc/shreddit/community-more-posts/top/?name=${encodeURIComponent(sub)}&t=month`)
+      .then(parseShredditListing)
+      .catch(() => new Map())));
+  for (const p of posts) {
+    for (const m of scoreMaps) {
+      const s = p.postId && m.get(p.postId);
+      if (s) { p.score = s.score; p.comments = s.comments; break; }
+    }
+  }
+  return posts.map(({ title, subreddit, score, comments, date }) => ({ title, subreddit, score: score ?? null, comments: comments ?? null, date }));
+}
+
+async function reddit(topic) {
+  let posts = [];
+  try { posts = await redditJson(topic); } catch { /* 403 wall — fall through to RSS */ }
+  if (!posts.length) {
+    try { posts = await redditRssWithScores(topic); } catch { return null; }
+  }
+  if (!posts.length) return null;
+  posts.sort((a, b) => ((b.score || 0) + (b.comments || 0)) - ((a.score || 0) + (a.comments || 0)));
+  return { source: 'Reddit', count: posts.length, items: posts.slice(0, 6) };
 }
 
 const cache = new Map();
@@ -141,7 +225,12 @@ export function socialPulseToLines(pulse) {
       for (const h of s.items.slice(0, 6)) lines.push(`  · "${h.title}" (${h.points} pts, ${h.comments} comments)`);
     } else if (s.source === 'Reddit') {
       lines.push('- Reddit (top threads this month):');
-      for (const p of s.items.slice(0, 5)) lines.push(`  · "${p.title}" (${p.subreddit}, ${p.score} upvotes)`);
+      for (const p of s.items.slice(0, 5)) {
+        const engagement = p.score != null && p.score > 0
+          ? `, ${p.score} upvotes${p.comments ? `, ${p.comments} comments` : ''}`
+          : p.date ? `, ${p.date}` : '';
+        lines.push(`  · "${p.title}" (${p.subreddit}${engagement})`);
+      }
     } else if (s.source === 'Polymarket') {
       lines.push('- Polymarket prediction markets (forward-looking odds, by volume):');
       for (const e of s.items.slice(0, 5)) {
