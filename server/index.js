@@ -12,6 +12,7 @@ import { generateResearchNote } from './lib/research.js';
 import { generateOutlook } from './lib/outlook.js';
 import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { getMarketPredictions } from './lib/predictions.js';
+import { generateThemeRadar } from './lib/radar.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -320,6 +321,24 @@ app.get('/api/social/buzz', wrap(async (req, res) => {
 // Polymarket crowd odds on macro/market events (keyless, 1h cache).
 app.get('/api/social/predictions', wrap(async (req, res) => {
   res.json(await getMarketPredictions());
+}));
+
+// Theme Radar: emerging, not-yet-named speculative themes mined from the live
+// signal (broad HN + buzz threads + Polymarket). 3h cache; force regenerates.
+app.post('/api/ai/theme-radar', aiLimiter, wrap(async (req, res) => {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI radar unavailable: no AI provider key configured.' });
+  }
+  try {
+    res.json(await generateThemeRadar({ force: req.body?.force === true }));
+  } catch (err) {
+    const status = err.statusCode || 502;
+    console.error('theme-radar failed:', err.message);
+    recordError('theme-radar', err, { path: req.path });
+    res.status(status).json({
+      error: status === 503 ? err.message : 'The AI providers could not generate the theme radar right now. Please try again.',
+    });
+  }
 }));
 
 // AI synthesis of the buzz board ("Retail Pulse"). Cached per board snapshot.

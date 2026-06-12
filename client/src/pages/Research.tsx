@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from 'react';
 import { getJSON, postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard } from '../lib/models';
+import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote } from '../lib/models';
 import AIText from '../components/AIText';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
@@ -57,6 +57,25 @@ export default function Research() {
       .catch((e) => setBriefError(e.message))
       .finally(() => setBriefBusy(false));
   };
+
+  const [radar, setRadar] = useState<ThemeRadarNote | null>(null);
+  const [radarBusy, setRadarBusy] = useState(false);
+  const [radarError, setRadarError] = useState('');
+  const runRadar = (force = false) => {
+    if (radarBusy) return;
+    setRadarBusy(true); setRadarError('');
+    postJSON<ThemeRadarNote>('/api/ai/theme-radar', { force })
+      .then(setRadar)
+      .catch((e) => setRadarError(e.message))
+      .finally(() => setRadarBusy(false));
+  };
+  // The radar names each theme on its own bold line — extract them as chips.
+  const radarThemes = radar
+    ? [...radar.text.matchAll(/^\*\*([^*]+)\*\*$/gm)]
+        .map((m) => m[1].trim())
+        .filter((t) => t.length <= 60 && !/^bottom line/i.test(t))
+    : [];
+  const sanitizeTopic = (t: string) => t.replace(/[^A-Za-z0-9 .&\-/+']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 
   const run = (raw: string, force = false) => {
     const topic = raw.trim();
@@ -209,6 +228,41 @@ export default function Research() {
       {isOutlook && (
         buzz?.available && buzz.items.length ? (
           <>
+            {radarError && <div className="error-banner" style={{ marginTop: 16 }}>{radarError}</div>}
+            {(radar || radarBusy) && (
+              <div className="ai-panel" style={{ marginTop: 16 }}>
+                <div className="ai-head">
+                  <span className="spark">🛰</span>
+                  <h3>Theme Radar — emerging, not-yet-named themes</h3>
+                  <span className="badge flat">SPECULATIVE</span>
+                  {radar && <span className="pill accent" style={{ marginLeft: 'auto' }}>{providerLabel(radar.provider)}</span>}
+                  {radar && (
+                    <button className="icon-btn" style={{ width: 30, height: 30, marginLeft: 8 }} title="Rescan the live signal"
+                      onClick={() => runRadar(true)} disabled={radarBusy}>↻</button>
+                  )}
+                </div>
+                <div className="ai-body" style={{ opacity: radarBusy ? 0.5 : 1 }}>
+                  {radar ? <AIText text={radar.text} /> : <SkeletonLines lines={10} />}
+                  {radar && radarThemes.length > 0 && (
+                    <div className="mgr-pills" style={{ marginTop: 12 }}>
+                      {radarThemes.map((t) => (
+                        <button key={t} className="mgr-pill" disabled={loading} title={`Full speculative outlook on “${t}”`}
+                          onClick={() => run(sanitizeTopic(t))}>
+                          {t} →
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {radar && (
+                  <div className="ai-foot">
+                    Mined from live signal: {radar.signal.hnStories} HN stories, {radar.signal.redditThreads} Reddit threads, {radar.signal.predictionEvents} Polymarket events
+                    {' · '}every theme cites its evidence · excludes already-named themes · generated {new Date(radar.generatedAt).toLocaleTimeString()}{radar.cached ? ' (cached)' : ''}
+                    {' · '}not investment advice
+                  </div>
+                )}
+              </div>
+            )}
             {briefError && <div className="error-banner" style={{ marginTop: 16 }}>{briefError}</div>}
             {(brief || briefBusy) && (
               <div className="ai-panel" style={{ marginTop: 16 }}>
@@ -236,9 +290,10 @@ export default function Research() {
               title="Trending on Reddit"
               sub={`${buzz.subreddits.join(' · ')} — ${buzz.window} (${buzz.postsScanned} posts scanned) · click a ticker for its outlook`}
               style={{ marginTop: 16 }}
-              right={!brief && !briefBusy
-                ? <button className="btn sm primary" onClick={() => runBrief()}>✦ Retail Pulse</button>
-                : undefined}
+              right={<div className="row">
+                {!radar && !radarBusy && <button className="btn sm" onClick={() => runRadar()}>🛰 Theme radar</button>}
+                {!brief && !briefBusy && <button className="btn sm primary" onClick={() => runBrief()}>✦ Retail Pulse</button>}
+              </div>}
             >
               <table className="mtable">
                 <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th className="num" title="FINRA daily short volume — share of consolidated volume sold short (flow, not short interest)">Short vol</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>

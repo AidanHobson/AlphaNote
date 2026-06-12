@@ -126,6 +126,10 @@ export interface BuzzBoard {
 export interface BuzzBrief {
   provider: string; fellBack: boolean; text: string; generatedAt: string; boardGeneratedAt: string; cached: boolean;
 }
+export interface ThemeRadarNote {
+  provider: string; fellBack: boolean; text: string; speculative: true; generatedAt: string; cached: boolean;
+  signal: { hnStories: number; redditThreads: number; predictionEvents: number };
+}
 export interface PredictionEvent {
   title: string; query: string; volume: number; endDate: string;
   topMarket: { question: string; pct: number; volume: number } | null;

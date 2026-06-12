@@ -41,6 +41,23 @@ async function hackerNews(topic) {
   return { source: 'Hacker News', count: data?.nbHits ?? hits.length, totalEngagement, items: hits.slice(0, 8) };
 }
 
+// Broad HN signal — the highest-engagement stories of the window, no query.
+// Used by the theme radar to spot what technologists are excited about before
+// the themes have consensus names.
+export async function hnTopStories({ days = 14, minPoints = 150, count = 30 } = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const qs = new URLSearchParams({
+    tags: 'story',
+    numericFilters: `created_at_i>${now - days * DAY},points>${minPoints}`,
+    hitsPerPage: String(count),
+  });
+  const data = await fetchJSON(`https://hn.algolia.com/api/v1/search_by_date?${qs}`);
+  return (data?.hits || [])
+    .filter((h) => h.title)
+    .map((h) => ({ title: h.title, points: h.points || 0, comments: h.num_comments || 0, date: (h.created_at || '').slice(0, 10) }))
+    .sort((a, b) => (b.points + b.comments) - (a.points + a.comments));
+}
+
 // ── Polymarket (Gamma) — prediction-market odds are forward-looking signal ────
 export const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const STOP = new Set(['the', 'and', 'for', 'will', 'with', 'tech', 'inc', 'corp', 'what', 'which', 'next']);
