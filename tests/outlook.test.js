@@ -24,6 +24,14 @@ describe('outlook system prompts', () => {
     expect(STOCK_OUTLOOK_PROMPT).toContain('picks-and-shovels enabler');
     expect(STOCK_OUTLOOK_PROMPT).toContain('winner-picking risk for capex cyclicality');
   });
+  it('exposure list demands small/mid-cap names with tiers and small-cap hazards', () => {
+    expect(THEME_PROMPT).toContain('8-12 bullets spanning the market-cap spectrum');
+    expect(THEME_PROMPT).toContain('At LEAST 4 of the names must be small- or mid-cap');
+    expect(THEME_PROMPT).toContain('[small: <$2B]');
+    expect(THEME_PROMPT).toContain('REAL today or still prospective');
+    expect(THEME_PROMPT).toContain('thin liquidity, dilution risk');
+    expect(THEME_PROMPT).toContain('rather than padding with weak fits');
+  });
   it('stock prompt has the dream/nightmare structure', () => {
     for (const s of ['**Setup**', '**The dream**', '**The nightmare**', '**Asymmetry**', '**Signposts**']) {
       expect(STOCK_OUTLOOK_PROMPT).toContain(s);
