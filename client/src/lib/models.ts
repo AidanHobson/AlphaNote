@@ -107,6 +107,7 @@ export interface OutlookNote {
   data: {
     name: string; price?: number; change?: number; changePercent?: number; currency?: string; logo?: string;
     social?: string[]; buzz?: { rank: number; mentions: number };
+    shortVol?: { ratio: number; date: string }; insiderCount?: number; managers13F?: number;
   };
 }
 export interface BuzzPost { title: string; subreddit: string; score: number; comments: number }
@@ -116,6 +117,7 @@ export interface BuzzItem {
   today?: { mentions: number; engagement: number }; rising?: boolean;
   name?: string; quote?: { price: number; changePercent: number };
   delta?: number | 'new' | null;
+  shortVol?: { ratio: number; date: string };
 }
 export interface BuzzBoard {
   generatedAt: string; window: string; subreddits: string[]; postsScanned: number;

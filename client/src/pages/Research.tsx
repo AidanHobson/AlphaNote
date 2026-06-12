@@ -12,7 +12,7 @@ const providerLabel = (p: string) => ({ claude: 'Claude (Anthropic)', gemini: 'G
 
 const MODES = ['Deep research', 'Speculative outlook'];
 const RESEARCH_PILLS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'XOM'];
-const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
+const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'AI Bottlenecks', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
 
 export default function Research() {
   const [mode, setMode] = useState(MODES[0]);
@@ -190,6 +190,9 @@ export default function Research() {
             {' · '}blends the model's general knowledge (which may be out of date) with {outlook.mode === 'stock' ? 'live market data' : 'no live market data'}
             {(outlook.data.social?.length ?? 0) > 0 ? ` + last-30-days signal (${outlook.data.social!.join(', ')})` : ''}
             {outlook.data.buzz ? ` · #${outlook.data.buzz.rank} on Reddit's finance subs this week (${outlook.data.buzz.mentions} mentions)` : ''}
+            {outlook.data.shortVol ? ` · short vol ${outlook.data.shortVol.ratio}% (FINRA ${outlook.data.shortVol.date})` : ''}
+            {(outlook.data.insiderCount ?? 0) > 0 ? ` · ${outlook.data.insiderCount} insider filing${(outlook.data.insiderCount ?? 0) > 1 ? 's' : ''}` : ''}
+            {(outlook.data.managers13F ?? 0) > 0 ? ` · ${outlook.data.managers13F} 13F holder${(outlook.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}
             {' · '}verify tickers and figures in Deep research before acting
             {' · '}generated {new Date(outlook.generatedAt).toLocaleTimeString()}{outlook.cached ? ' (cached)' : ''}
             {' · '}not investment advice
@@ -238,7 +241,7 @@ export default function Research() {
                 : undefined}
             >
               <table className="mtable">
-                <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>
+                <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th className="num" title="FINRA daily short volume — share of consolidated volume sold short (flow, not short interest)">Short vol</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>
                 <tbody>
                   {buzz.items.slice(0, 12).map((b, i) => (
                     <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
@@ -266,6 +269,10 @@ export default function Research() {
                               </span>
                             </>
                           : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                      </td>
+                      <td className="num" title={b.shortVol ? `FINRA daily short volume, ${b.shortVol.date}` : undefined}
+                        style={{ fontWeight: (b.shortVol?.ratio ?? 0) >= 60 ? 700 : 400, color: (b.shortVol?.ratio ?? 0) >= 60 ? 'var(--color-accent)' : undefined }}>
+                        {b.shortVol ? `${b.shortVol.ratio}%` : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                       </td>
                       <td>
                         {b.topPost && (

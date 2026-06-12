@@ -3,9 +3,16 @@ import { THEME_PROMPT, STOCK_OUTLOOK_PROMPT, buildThemePrompt, buildStockOutlook
 
 describe('outlook system prompts', () => {
   it('theme prompt has the speculative structure', () => {
-    for (const s of ['**The theme**', '**Why now**', '**Value chain**', '**Picks & shovels**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
+    for (const s of ['**The theme**', '**Why now**', '**Value chain**', '**Picks & shovels**', '**Bottlenecks**', '**Public-market exposure**', '**Bull case**', '**Bear case**', '**Wildcards**', '**What to watch**']) {
       expect(THEME_PROMPT).toContain(s);
     }
+  });
+  it('bottlenecks section is fact-driven: evidence with vintage or leave it out', () => {
+    expect(THEME_PROMPT).toContain('FACT-DRIVEN');
+    expect(THEME_PROMPT).toContain('a concrete number or datapoint you are confident in');
+    expect(THEME_PROMPT).toContain('If you cannot support a claimed bottleneck with a fact, leave it out');
+    expect(THEME_PROMPT).toContain('HBM memory');
+    expect(THEME_PROMPT).toContain('a bottleneck with a visible relief date is a trade, not a thesis');
   });
   it('theme prompt frames the picks-and-shovels thesis with its caveats', () => {
     expect(THEME_PROMPT).toContain('get paid regardless of which application-layer player wins');
@@ -79,6 +86,31 @@ describe('buildStockOutlookPrompt', () => {
     expect(p).toContain('5 mentions, 7,150 combined upvotes+comments');
     expect(p).toContain('Top thread: "GME to the moon" (r/wallstreetbets)');
     expect(p).toContain('heavy retail attention cuts both ways');
+  });
+  it('carries the positioning facts: short volume, thread body, insiders, 13F', () => {
+    const p = buildStockOutlookPrompt({
+      symbol: 'GME',
+      quote: { c: 25, dp: 3.1 },
+      buzz: { rank: 1, mentions: 3, engagement: 900, topPost: { title: 'The squeeze thesis', subreddit: 'r/Shortsqueeze', id: 'abc123' } },
+      threadBody: 'Float is tiny and borrow fees just doubled. I think MM are trapped.',
+      shortVol: { ratio: 64.2, date: '2026-06-11' },
+      insiders: [{ insider: 'Jane Roe', title: 'CFO', side: 'Sell', value: 950_000 }],
+      smartMoney: [{ manager: 'Renaissance Technologies', value: 0.8e9, change: { type: 'new' } }],
+    });
+    expect(p).toContain('FINRA daily short volume (2026-06-11): 64.2% of consolidated volume sold short');
+    expect(p).toContain('daily short-sale FLOW, not short interest');
+    expect(p).toContain('The crowd\'s actual argument — body of that top thread (excerpt, verbatim from Reddit): "Float is tiny');
+    expect(p).toContain('what it gets right, what it ignores');
+    expect(p).toContain('Jane Roe (CFO) Sell ~$950,000');
+    expect(p).toContain('Renaissance Technologies ($0.8B, NEW)');
+  });
+  it('says when no tracked manager holds it, and omits absent facts entirely', () => {
+    const none = buildStockOutlookPrompt({ symbol: 'ACME', quote: { c: 100, dp: 0 }, smartMoney: [] });
+    expect(none).toContain('none of the followed institutions held ACME');
+    const bare = buildStockOutlookPrompt({ symbol: 'ACME', quote: { c: 100, dp: 0 } });
+    expect(bare).not.toContain('FINRA');
+    expect(bare).not.toContain('insider');
+    expect(bare).not.toContain('13F');
   });
 });
 

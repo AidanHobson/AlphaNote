@@ -10,6 +10,7 @@ import { tickerUniverse } from './fundamentals.js';
 import { getWatchlistData } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { snapshotBoard, attachDeltas } from './buzz-history.js';
+import { getShortVolumeMap } from './shortvol.js';
 import db from './db.js';
 
 export const BUZZ_SUBS = ['wallstreetbets', 'stocks', 'StockMarket', 'options', 'investing', 'pennystocks', 'Shortsqueeze'];
@@ -51,7 +52,7 @@ export function aggregateBuzz(posts, universe) {
       e.mentions += 1;
       e.engagement += engagement;
       if (p.subreddit) e.subreddits.add(p.subreddit);
-      e.posts.push({ title: p.title, subreddit: p.subreddit, score: p.score || 0, comments: p.comments || 0 });
+      e.posts.push({ id: p.id, title: p.title, subreddit: p.subreddit, score: p.score || 0, comments: p.comments || 0 });
       by.set(symbol, e);
     }
   }
@@ -117,6 +118,17 @@ export async function getRedditBuzz({ force = false } = {}) {
       if (q) { item.name = q.name; item.quote = { price: q.price, changePercent: q.changePercent }; }
     }
   } catch { /* enrichment is optional */ }
+
+  // FINRA daily short-volume share — squeeze/positioning context per ticker.
+  try {
+    const { map } = await getShortVolumeMap();
+    if (map) {
+      for (const item of items) {
+        const sv = map.get(item.symbol);
+        if (sv) item.shortVol = { ratio: sv.ratio, date: sv.date };
+      }
+    }
+  } catch { /* optional */ }
 
   const data = {
     generatedAt: new Date().toISOString(),

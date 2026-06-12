@@ -161,6 +161,32 @@ export function parseShredditListing(html) {
   return new Map(parseShredditPosts(html).map((p) => [p.id, { score: p.score, comments: p.comments }]));
 }
 
+// Body text of a single post, from its per-post RSS feed (the same keyless
+// channel as search.rss). The <content> element carries the post HTML.
+export function parsePostRssBody(xml) {
+  const m = /<content type="html">([\s\S]*?)<\/content>/.exec(String(xml));
+  if (!m) return '';
+  // Content is entity-encoded HTML (often doubly) — decode, strip tags, tidy.
+  let text = decodeEntities(decodeEntities(m[1]));
+  text = text.replace(/<[^>]+>/g, ' ').replace(/&#\d+;/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.replace(/submitted by\s+\/u\/\S+.*$/i, '').trim();
+}
+
+const postBodyCache = new Map();
+export async function getPostBody(subreddit, id) {
+  const sub = String(subreddit || '').replace(/^\/+|\/+$/g, '');
+  if (!sub || !id) return '';
+  const key = `${sub}/${id}`;
+  const hit = postBodyCache.get(key);
+  if (hit && Date.now() - hit.t < 12 * 3600_000) return hit.text;
+  let text = '';
+  try {
+    text = parsePostRssBody(await fetchText(`https://www.reddit.com/${sub}/comments/${id}/.rss`));
+  } catch { /* keyless best-effort */ }
+  boundedSet(postBodyCache, key, { t: Date.now(), text }, 200);
+  return text;
+}
+
 async function redditJson(topic) {
   const qs = new URLSearchParams({ q: topic, sort: 'top', t: 'month', limit: '8' });
   const data = await fetchJSON(`https://www.reddit.com/search.json?${qs}`, { headers: { Accept: 'application/json' } });

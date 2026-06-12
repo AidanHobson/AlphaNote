@@ -65,6 +65,22 @@ describe('parseRedditRss (Tier 1 discovery)', () => {
   });
 });
 
+describe('parsePostRssBody (thread body extraction)', () => {
+  it('decodes the doubly-encoded content HTML and strips tags/boilerplate', async () => {
+    const { parsePostRssBody } = await import('../server/lib/social.js');
+    const xml = `<entry><content type="html">&lt;div&gt;Float is &amp;amp;quot;tiny&amp;amp;quot; &amp;lt;b&amp;gt;and borrow fees doubled&amp;lt;/b&amp;gt;.&lt;/div&gt; submitted by /u/trader to r/Shortsqueeze</content></entry>`;
+    const text = parsePostRssBody(xml);
+    expect(text).toContain('Float is');
+    expect(text).toContain('and borrow fees doubled');
+    expect(text).not.toContain('<');
+    expect(text).not.toContain('submitted by');
+  });
+  it('returns empty for feeds without content', async () => {
+    const { parsePostRssBody } = await import('../server/lib/social.js');
+    expect(parsePostRssBody('<entry><title>x</title></entry>')).toBe('');
+  });
+});
+
 describe('parseShredditListing (score backfill)', () => {
   const HTML = `<div>
     <shreddit-post post-title="Stairs are hard — part 2" score="1293" comment-count="46"

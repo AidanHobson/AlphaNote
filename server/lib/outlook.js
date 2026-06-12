@@ -8,8 +8,11 @@ import { getQuote, getCompanyProfile, getNextEarnings } from './finnhub.js';
 import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { computeValuation } from './research.js';
-import { getSocialPulse, socialPulseToLines } from './social.js';
+import { getSocialPulse, socialPulseToLines, getPostBody } from './social.js';
 import { getRedditBuzz } from './buzz.js';
+import { getInsiderTransactions } from './insider.js';
+import { findSymbolAcrossManagers } from './smartmoney.js';
+import { shortVolFor } from './shortvol.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, boundedSet } from './utils.js';
 
@@ -37,6 +40,9 @@ Bullets mapping the sub-segments (e.g. components → systems → applications) 
 
 **Picks & shovels**
 The enabling layer: the toolmakers, test and measurement houses, equipment, components, and materials suppliers that get paid regardless of which application-layer player wins — the classic picks-and-shovels thesis (e.g. semiconductor test-probe makers like Technoprobe, or wafer-level test systems like Aehr: the testers earn whichever chipmaker takes the crown). Name the strongest public candidates for THIS theme (general knowledge — may be stale), explain why their economics capture the theme's growth with less winner-picking risk, and flag the classic caveats: capex cyclicality, customer concentration, and that a consensus "enabler" trade can itself get crowded.
+
+**Bottlenecks**
+The scarce inputs that gate the theme's growth — where demand outruns supply and pricing power concentrates (in the AI buildout, think electrical power and grid interconnects, HBM memory, advanced packaging capacity, and optical interconnects). This section is FACT-DRIVEN: each bottleneck must name (1) the constraint, (2) the public companies positioned at it, and (3) a supporting fact — a concrete number or datapoint you are confident in, stated with its vintage ("as of …"), or evidence from the live signal provided. If you cannot support a claimed bottleneck with a fact, leave it out entirely. For each, say what relieves it and roughly when — a bottleneck with a visible relief date is a trade, not a thesis.
 
 **Public-market exposure**
 5-8 bullets: ticker (exchange), one-line role in the theme, and a tag — pure-play, diversified, or picks-and-shovels enabler. State plainly that this list comes from general knowledge — it may be stale or incomplete, and tickers should be verified in the Research tab before acting.
@@ -73,7 +79,7 @@ What the most ambitious credible bulls believe: optionality not yet in the numbe
 The bear case at its worst: disruption, multiple compression, thesis breaks.
 
 **Asymmetry**
-Qualitatively, how the risk/reward skews from today's valuation (use the derived multiples provided), and what you would need to believe for each side.
+Qualitatively, how the risk/reward skews from today's valuation (use the derived multiples provided), and what you would need to believe for each side. Reconcile the positioning facts where provided — retail attention, insider activity, tracked 13F positions, and FINRA short-volume — and name the tension explicitly when they point in different directions (e.g. retail piling in while insiders sell).
 
 **Signposts**
 Concrete, watchable indicators that the dream or the nightmare is starting to play out — anchor timing to the next earnings date when provided, and to any Polymarket odds or surge in recent discussion in the "Last 30 days" signal.
@@ -99,7 +105,7 @@ export function buildThemePrompt(topic, pulse) {
   return lines.join('\n');
 }
 
-export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz }) {
+export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -124,8 +130,23 @@ export function buildStockOutlookPrompt({ symbol, quote, profile, valuation, his
     if (m.length) lines.push(`Derived valuation (TTM): ${m.join(', ')}${valuation.fcf != null ? `; FCF ${fmtUsd(valuation.fcf)}` : ''}`);
   }
   if (nextEarnings?.date) lines.push(`Next scheduled earnings: ${nextEarnings.date}.`);
+  if (shortVol?.ratio != null) {
+    lines.push(`FINRA daily short volume (${shortVol.date}): ${shortVol.ratio}% of consolidated volume sold short. (This is daily short-sale FLOW, not short interest outstanding; typical large-cap baseline is roughly 40-50% — read levels well above that as elevated shorting/hedging activity.)`);
+  }
   if (buzz) {
-    lines.push(`Reddit retail attention: #${buzz.rank} most-mentioned ticker across r/wallstreetbets + 4 finance subreddits this week (${buzz.mentions} mention${buzz.mentions > 1 ? 's' : ''}, ${buzz.engagement.toLocaleString('en-US')} combined upvotes+comments).${buzz.topPost ? ` Top thread: "${buzz.topPost.title}" (${buzz.topPost.subreddit})` : ''} Treat as positioning/crowding signal — heavy retail attention cuts both ways.`);
+    lines.push(`Reddit retail attention: #${buzz.rank} most-mentioned ticker across the tracked finance subreddits this week (${buzz.mentions} mention${buzz.mentions > 1 ? 's' : ''}, ${buzz.engagement.toLocaleString('en-US')} combined upvotes+comments).${buzz.topPost ? ` Top thread: "${buzz.topPost.title}" (${buzz.topPost.subreddit})` : ''} Treat as positioning/crowding signal — heavy retail attention cuts both ways.`);
+    if (threadBody) {
+      lines.push(`The crowd's actual argument — body of that top thread (excerpt, verbatim from Reddit): "${threadBody.slice(0, 1200)}"`);
+      lines.push('Engage with this argument directly in the note: what it gets right, what it ignores.');
+    }
+  }
+  if (insiders?.length) {
+    lines.push(`Recent insider Form 4 filings for ${symbol} (open-market only): ${insiders.slice(0, 4).map((t) => `${t.insider || 'Insider'}${t.title ? ` (${t.title})` : ''} ${t.side}${t.value ? ` ~$${Math.round(t.value).toLocaleString('en-US')}` : ''}`).join('; ')}.`);
+  }
+  if (smartMoney?.length) {
+    lines.push(`Tracked 13F managers holding ${symbol} (latest reported quarter): ${smartMoney.slice(0, 4).map((p) => `${p.manager} ($${(p.value / 1e9).toFixed(1)}B, ${p.change?.type === 'new' ? 'NEW' : p.change?.type === 'add' ? 'added QoQ' : p.change?.type === 'trim' ? 'trimmed QoQ' : 'flat QoQ'})`).join('; ')}.`);
+  } else if (smartMoney) {
+    lines.push(`Tracked 13F managers: none of the followed institutions held ${symbol} among top positions last quarter.`);
   }
   lines.push(`Today's date: ${new Date().toISOString().slice(0, 10)}.`);
   const social = socialPulseToLines(pulse);
@@ -171,16 +192,24 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
       ]);
       const valuation = computeValuation(profile, fundamentals);
       const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
-      // 30-day social pulse keyed on the company name (falls back to ticker),
-      // plus the ticker's rank on the finance-subreddit buzz board if present.
-      const [pulseRes, buzzBoard] = await Promise.all([
+      // Positioning facts: 30-day social pulse, buzz-board rank, insider Form 4s,
+      // tracked 13F holders, and FINRA short-volume — all cached/keyless.
+      const [pulseRes, buzzBoard, insiderData, smartMoney, shortVol] = await Promise.all([
         getSocialPulse(profile?.name || sym).catch(() => null),
         getRedditBuzz().catch(() => null),
+        getInsiderTransactions().catch(() => null),
+        findSymbolAcrossManagers(sym).catch(() => null),
+        shortVolFor(sym).catch(() => null),
       ]);
       pulse = pulseRes;
       const idx = buzzBoard?.items?.findIndex((i) => i.symbol === sym) ?? -1;
       const buzz = idx >= 0 ? { rank: idx + 1, ...buzzBoard.items[idx] } : null;
-      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz });
+      // The crowd's actual thesis: body text of the most-engaged thread.
+      const top = buzz?.topPost;
+      const threadBody = top?.id ? await getPostBody(top.subreddit, top.id).catch(() => '') : '';
+      const allTxns = Array.isArray(insiderData) ? insiderData : insiderData?.transactions || [];
+      const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
+      prompt = buildStockOutlookPrompt({ symbol: sym, quote, profile, valuation, history, spyStats, nextEarnings, pulse, buzz, threadBody, insiders, smartMoney, shortVol });
       system = STOCK_OUTLOOK_PROMPT;
       data = {
         name: profile?.name || sym,
@@ -190,6 +219,9 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
         currency: profile?.currency || 'USD',
         logo: profile?.logo || '',
         buzz: buzz ? { rank: buzz.rank, mentions: buzz.mentions } : undefined,
+        shortVol: shortVol ? { ratio: shortVol.ratio, date: shortVol.date } : undefined,
+        insiderCount: insiders.length,
+        managers13F: smartMoney?.length ?? 0,
       };
     }
   }
