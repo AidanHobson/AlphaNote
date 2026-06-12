@@ -44,6 +44,19 @@ db.exec(`
     engagement INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_buzz_history_time ON buzz_history(snapped_at);
+  CREATE TABLE IF NOT EXISTS kv_cache (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS error_log (
+    id      INTEGER PRIMARY KEY,
+    t       INTEGER NOT NULL,
+    scope   TEXT NOT NULL,
+    message TEXT NOT NULL,
+    path    TEXT,
+    status  INTEGER
+  );
 `);
 
 // Migration: add users.status to databases created before the approval flow.

@@ -4,6 +4,7 @@
 
 import { POPULAR_STOCK_SYMBOLS, FINNHUB_EXCHANGE_SUFFIXES } from './constants.js';
 import { getDateRange, validateArticle, formatArticle, boundedSet } from './utils.js';
+import { createBucket } from './ratelimit.js';
 
 const BASE_URL = process.env.FINNHUB_BASE_URL || 'https://finnhub.io/api/v1';
 
@@ -24,7 +25,16 @@ async function cached(key, ttlSeconds, fn) {
   return v;
 }
 
+// Every Finnhub request — warmer and interactive alike — takes a token first,
+// so bursts queue briefly (≤15s) instead of hitting the 60/min wall as 429s.
+const bucket = createBucket({
+  perMinute: Number(process.env.FINNHUB_RPM_BUDGET) || 55,
+  burst: 6,
+  maxWaitMs: 15_000,
+});
+
 async function fetchJSON(url) {
+  await bucket.take();
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text().catch(() => '');

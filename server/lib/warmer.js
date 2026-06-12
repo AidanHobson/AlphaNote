@@ -13,7 +13,9 @@ import { getMacroBoard } from './macro.js';
 
 const snapshots = { movers: null, commodities: null, macro: null }; // each { data, t }
 
-const TARGET_QPS = Number(process.env.FINNHUB_WARM_QPS) || 0.8; // ~48 quotes/min
+// ~39 quotes/min — leaves ~16/min of the free-tier budget for interactive
+// requests (outlooks, board enrichment), which queue via the shared bucket.
+const TARGET_QPS = Number(process.env.FINNHUB_WARM_QPS) || 0.65;
 const MIN_GAP_MS = 15_000;
 
 // `cost` ≈ Finnhub quote requests per refresh (used only to pace the sleep).

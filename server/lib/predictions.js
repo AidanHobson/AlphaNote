@@ -3,6 +3,7 @@
 // not just upvotes, prices the speculative questions.
 
 import { fetchJSON, parseEventMarkets, toNum } from './social.js';
+import kv from './kvcache.js';
 
 // The crowd's modal outcome — most-probable market, tie-broken by volume —
 // reads far better than the highest-volume one (often a 0% tail outcome).
@@ -51,6 +52,10 @@ const TTL = 60 * 60_000;
 
 export async function getMarketPredictions({ force = false } = {}) {
   if (!force && cache.data && Date.now() - cache.t < TTL) return cache.data;
+  if (!force) {
+    const stored = kv.get('predictions:board');
+    if (stored) { cache = { t: Date.now(), data: stored }; return stored; }
+  }
 
   const eventsByQuery = await Promise.all(PREDICTION_QUERIES.map(async (query) => {
     try {
@@ -70,6 +75,9 @@ export async function getMarketPredictions({ force = false } = {}) {
     available: events.length > 0,
     events,
   };
-  if (events.length) cache = { t: Date.now(), data };
+  if (events.length) {
+    cache = { t: Date.now(), data };
+    kv.set('predictions:board', data, TTL);
+  }
   return data;
 }

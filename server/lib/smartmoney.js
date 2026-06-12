@@ -8,6 +8,7 @@
 
 import { boundedSet } from './utils.js';
 import { tickerForCompanyName } from './fundamentals.js';
+import kv from './kvcache.js';
 
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote markets-research dashboard';
 const HEADERS = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate' };
@@ -157,7 +158,18 @@ export async function getManagerBoard(cikRaw) {
 
   const hit = cache.get(cik);
   if (hit && Date.now() - hit.t < TTL_MS) return hit.promise;
-  const promise = buildBoard(manager).catch((e) => {
+  // Second tier: persistent kv cache keeps boards warm across restarts — a
+  // cold 13F warm-up is ~50 EDGAR fetches, the slowest path in the app.
+  const stored = kv.get(`13f:${cik}`);
+  if (stored) {
+    const promise = Promise.resolve(stored);
+    boundedSet(cache, cik, { t: Date.now(), promise }, 16);
+    return promise;
+  }
+  const promise = buildBoard(manager).then((board) => {
+    if (board?.available) kv.set(`13f:${cik}`, board, TTL_MS);
+    return board;
+  }).catch((e) => {
     cache.delete(cik);
     console.warn('smartmoney failed:', e.message);
     return { available: false, reason: 'Could not load 13F filings right now.' };

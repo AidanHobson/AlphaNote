@@ -4,6 +4,7 @@
 // facts blob (~12h). US filers only.
 
 import { boundedSet } from './utils.js';
+import kv from './kvcache.js';
 
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote markets-research dashboard';
 const HEADERS = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate' };
@@ -173,6 +174,9 @@ export async function getFundamentals(symbol) {
   const sym = String(symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 12);
   const notFound = () => ({ symbol: sym, available: false, reason: 'No SEC filer found for this ticker (US-listed companies only).' });
   if (!sym) return notFound();
+  // Persistent tier: the computed snapshot survives restarts (12h, matches FACTS_TTL).
+  const stored = kv.get(`fund:${sym}`);
+  if (stored) return stored;
   const co = await getCompany(sym);
   if (!co) return notFound();
 
@@ -238,8 +242,10 @@ export async function getFundamentals(symbol) {
   };
   const quarterly = { revenue: qFor('revenue'), netIncome: qFor('netIncome') };
 
-  return {
+  const result = {
     symbol: sym, available: true, source: 'SEC EDGAR (XBRL)',
     cik: co.cik, name: facts.entityName || co.title, asOfFY, currentThrough, lineItems, ratios, quarterly,
   };
+  kv.set(`fund:${sym}`, result, FACTS_TTL);
+  return result;
 }

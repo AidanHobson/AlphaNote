@@ -12,6 +12,7 @@ import { callAIWithFallback } from './ai-provider.js';
 import { snapshotBoard, attachDeltas } from './buzz-history.js';
 import { getShortVolumeMap } from './shortvol.js';
 import db from './db.js';
+import kv from './kvcache.js';
 
 export const BUZZ_SUBS = ['wallstreetbets', 'stocks', 'StockMarket', 'options', 'investing', 'pennystocks', 'Shortsqueeze'];
 
@@ -86,6 +87,11 @@ const fetchSubPosts = (sub, range) =>
 
 export async function getRedditBuzz({ force = false } = {}) {
   if (!force && cache.data && Date.now() - cache.t < TTL) return cache.data;
+  if (!force) {
+    // Persistent tier: serve the last board across restarts/deploys.
+    const stored = kv.get('buzz:board');
+    if (stored) { cache = { t: Date.now(), data: stored }; return stored; }
+  }
 
   const universe = await tickerUniverse();
   // Week scan ranks the board; day scan provides the "rising right now" overlay.
@@ -139,7 +145,10 @@ export async function getRedditBuzz({ force = false } = {}) {
     reason: posts.length ? undefined : 'Reddit listings unreachable from this server right now.',
     items,
   };
-  if (posts.length) cache = { t: Date.now(), data };
+  if (posts.length) {
+    cache = { t: Date.now(), data };
+    kv.set('buzz:board', data, TTL);
+  }
   return data;
 }
 

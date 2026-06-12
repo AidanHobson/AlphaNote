@@ -7,6 +7,7 @@
 // blind spot, which is exactly what that mode needs.
 
 import { boundedSet } from './utils.js';
+import kv from './kvcache.js';
 
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote/1.0 (research dashboard)';
 const DAY = 86400;
@@ -264,6 +265,8 @@ export async function getSocialPulse(rawTopic) {
   const key = topic.toLowerCase();
   const hit = cache.get(key);
   if (hit && Date.now() - hit.t < TTL) return hit.data;
+  const stored = kv.get(`pulse:${key}`);
+  if (stored) { boundedSet(cache, key, { t: Date.now(), data: stored }, 200); return stored; }
 
   const [hn, pm, rd] = await Promise.all([
     hackerNews(topic).catch(() => null),
@@ -276,6 +279,7 @@ export async function getSocialPulse(rawTopic) {
     ? { topic, generatedAt: new Date().toISOString(), window: 'last 30 days', sources }
     : null;
   boundedSet(cache, key, { t: Date.now(), data }, 200);
+  if (data) kv.set(`pulse:${key}`, data, TTL);
   return data;
 }
 

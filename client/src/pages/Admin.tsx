@@ -98,7 +98,7 @@ export default function Admin() {
       <div style={{ marginTop: 18 }}>
         <Card
           title="Database backups"
-          sub="daily · keeps 7"
+          sub="daily · keeps 7 · snapshots live on the same disk as the database — download a copy periodically for offsite safety"
           right={<button className="btn sm primary" disabled={backupBusy} onClick={backupNow}>{backupBusy ? 'Backing up…' : 'Back up now'}</button>}
         >
           {backupErr && <div className="error-banner" style={{ marginBottom: 12 }}>{backupErr}</div>}
