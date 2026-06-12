@@ -118,6 +118,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     app: 'AlphaNote',
+    // Which build is actually serving — Render injects RENDER_GIT_COMMIT.
+    commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
     integrations: {
       finnhub: Boolean(process.env.FINNHUB_API_KEY),
       eodhd: isEodhdConfigured(),
