@@ -11,7 +11,7 @@ import { boundedSet } from './utils.js';
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote/1.0 (research dashboard)';
 const DAY = 86400;
 
-async function fetchJSON(url, { timeout = 9000, headers = {} } = {}) {
+export async function fetchJSON(url, { timeout = 9000, headers = {} } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -42,7 +42,7 @@ async function hackerNews(topic) {
 }
 
 // ── Polymarket (Gamma) — prediction-market odds are forward-looking signal ────
-const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+export const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const STOP = new Set(['the', 'and', 'for', 'will', 'with', 'tech', 'inc', 'corp', 'what', 'which', 'next']);
 // Informative tokens of the topic (≥4 chars, non-stopword), stemmed to a 5-char
 // prefix so "robotics" matches "robot"/"robotic". Gamma's search matches inside
@@ -57,8 +57,8 @@ function titleMatchesTopic(title, tokens) {
   const t = String(title).toLowerCase();
   return tokens.some((tok) => t.includes(tok));
 }
-function topMarketOdds(event) {
-  const markets = (event.markets || [])
+export function parseEventMarkets(event) {
+  return (event.markets || [])
     .map((m) => {
       let outcomes = m.outcomes; let prices = m.outcomePrices;
       try { if (typeof outcomes === 'string') outcomes = JSON.parse(outcomes); } catch { outcomes = null; }
@@ -68,9 +68,11 @@ function topMarketOdds(event) {
       const pct = yes >= 0 ? Math.round(toNum(prices[yes]) * 100) : Math.round(toNum(prices[0]) * 100);
       return { question: m.question || event.title, pct, volume: toNum(m.volume) };
     })
-    .filter(Boolean)
-    .sort((a, b) => b.volume - a.volume);
-  return markets[0] || null;
+    .filter(Boolean);
+}
+
+export function topMarketOdds(event) {
+  return parseEventMarkets(event).sort((a, b) => b.volume - a.volume)[0] || null;
 }
 async function polymarket(topic) {
   const qs = new URLSearchParams({ q: topic, limit_per_type: '12' });

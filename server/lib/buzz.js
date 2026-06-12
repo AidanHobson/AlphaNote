@@ -9,6 +9,8 @@ import { fetchText, parseShredditPosts } from './social.js';
 import { tickerUniverse } from './fundamentals.js';
 import { getWatchlistData } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
+import { snapshotBoard, attachDeltas } from './buzz-history.js';
+import db from './db.js';
 
 export const BUZZ_SUBS = ['wallstreetbets', 'stocks', 'StockMarket', 'options', 'investing', 'pennystocks', 'Shortsqueeze'];
 
@@ -91,10 +93,18 @@ export async function getRedditBuzz({ force = false } = {}) {
     Promise.all(BUZZ_SUBS.map((sub) => fetchSubPosts(sub, 'day'))),
   ]);
   const posts = weekLists.flat();
-  const items = mergeTodaySignal(
+  let items = mergeTodaySignal(
     aggregateBuzz(posts, universe).slice(0, 15),
     aggregateBuzz(dayLists.flat(), universe),
   );
+
+  // Time dimension: rank deltas vs ~a day ago, then snapshot this scan.
+  if (items.length) {
+    try {
+      items = attachDeltas(db, items);
+      snapshotBoard(db, items);
+    } catch { /* history is best-effort — the live board never depends on it */ }
+  }
 
   // Best-effort price enrichment for the top names (Finnhub; zeros under 429
   // are dropped so the UI shows "—" rather than a fake $0.00).

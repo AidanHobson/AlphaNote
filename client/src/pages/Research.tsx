@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { getJSON, postJSON } from '../lib/api';
-import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief } from '../lib/models';
+import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard } from '../lib/models';
 import AIText from '../components/AIText';
 import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import { SkeletonLines } from '../components/Skeleton';
+import { isInWatchlist, toggleWatchlist, onStorageChange } from '../lib/storage';
+import { toast } from '../components/toast';
 
 const providerLabel = (p: string) => ({ claude: 'Claude (Anthropic)', gemini: 'Gemini (Google)' }[p] || p);
 
@@ -26,10 +28,26 @@ export default function Research() {
   const [briefBusy, setBriefBusy] = useState(false);
   const [briefError, setBriefError] = useState('');
 
-  // Load the Reddit buzz board once, the first time the outlook tab opens.
+  const [predictions, setPredictions] = useState<PredictionsBoard | null>(null);
+  const [, bumpWatch] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => onStorageChange(bumpWatch), []);
+
+  // Load the Reddit buzz board + crowd odds once, when the outlook tab opens.
   useEffect(() => {
     if (isOutlook && !buzz) getJSON<BuzzBoard>('/api/social/buzz').then(setBuzz).catch(() => {});
-  }, [isOutlook, buzz]);
+    if (isOutlook && !predictions) getJSON<PredictionsBoard>('/api/social/predictions').then(setPredictions).catch(() => {});
+  }, [isOutlook, buzz, predictions]);
+
+  // Jump from a board row into a Deep-research note (switches tab + runs).
+  const deepDive = (symbol: string) => {
+    if (loading) return;
+    setMode(MODES[0]);
+    setInput(symbol); setLoading(true); setError(''); setNote(null);
+    postJSON<ResearchNote>('/api/ai/research', { symbol })
+      .then(setNote)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  };
 
   const runBrief = (force = false) => {
     if (briefBusy) return;
@@ -220,13 +238,21 @@ export default function Research() {
                 : undefined}
             >
               <table className="mtable">
-                <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th></tr></thead>
+                <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>
                 <tbody>
                   {buzz.items.slice(0, 12).map((b, i) => (
                     <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
                       onClick={() => !loading && run(b.symbol)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && !loading) run(b.symbol); }}>
-                      <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
+                      <td style={{ color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                        {i + 1}
+                        {b.delta === 'new' && <span className="badge up" style={{ marginLeft: 5 }} title="Not on the board a day ago">NEW</span>}
+                        {typeof b.delta === 'number' && b.delta !== 0 && (
+                          <span className={b.delta > 0 ? 'badge up' : 'badge down'} style={{ marginLeft: 5 }} title="Rank change vs ~a day ago">
+                            {b.delta > 0 ? `▲${b.delta}` : `▼${-b.delta}`}
+                          </span>
+                        )}
+                      </td>
                       <td style={{ fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
                         {b.symbol}{b.rising ? <span title="Accelerating in today's scan"> 🔥</span> : null}
                         {b.name && b.name !== b.symbol && <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5, fontWeight: 400 }}>{b.name}</div>}
@@ -255,11 +281,45 @@ export default function Research() {
                       <td className="num">{b.mentions}</td>
                       <td className="num">{b.today?.mentions || 0}</td>
                       <td className="num">{b.engagement.toLocaleString()}</td>
+                      <td className="num" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                        <button className="icon-btn" style={{ width: 28, height: 28 }}
+                          title={isInWatchlist(b.symbol) ? 'Remove from watchlist' : 'Add to watchlist'}
+                          onClick={() => { const added = toggleWatchlist(b.symbol); toast(added ? `${b.symbol} added to watchlist` : `${b.symbol} removed from watchlist`); }}>
+                          {isInWatchlist(b.symbol) ? '★' : '☆'}
+                        </button>
+                        <button className="btn sm" style={{ marginLeft: 6 }} disabled={loading}
+                          title={`Evidence-led deep research on ${b.symbol}`}
+                          onClick={() => deepDive(b.symbol)}>
+                          Deep dive
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </Card>
+            {predictions?.available && predictions.events.length > 0 && (
+              <Card
+                title="Crowd odds — prediction markets"
+                sub={`${predictions.source} · real-money implied probabilities on market questions · refreshed hourly`}
+                style={{ marginTop: 16 }}
+              >
+                <table className="mtable">
+                  <thead><tr><th>Event</th><th>Leading market</th><th className="num">Implied</th><th className="num">Volume</th><th className="num">Resolves</th></tr></thead>
+                  <tbody>
+                    {predictions.events.map((e) => (
+                      <tr key={e.title} style={{ cursor: 'default' }}>
+                        <td style={{ maxWidth: 280 }}>{e.title}</td>
+                        <td style={{ maxWidth: 320, color: 'var(--color-text-secondary)' }}>{e.topMarket?.question || '—'}</td>
+                        <td className="num" style={{ fontWeight: 700 }}>{e.topMarket ? `${e.topMarket.pct}%` : '—'}</td>
+                        <td className="num">${Math.round(e.volume).toLocaleString()}</td>
+                        <td className="num">{e.endDate || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            )}
           </>
         ) : !active && !loading && !error ? (
           <div className="empty">

@@ -36,6 +36,14 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+  CREATE TABLE IF NOT EXISTS buzz_history (
+    snapped_at INTEGER NOT NULL,
+    symbol     TEXT NOT NULL,
+    rank       INTEGER NOT NULL,
+    mentions   INTEGER NOT NULL,
+    engagement INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_buzz_history_time ON buzz_history(snapped_at);
 `);
 
 // Migration: add users.status to databases created before the approval flow.

@@ -115,6 +115,7 @@ export interface BuzzItem {
   topPost: BuzzPost | null; posts?: BuzzPost[];
   today?: { mentions: number; engagement: number }; rising?: boolean;
   name?: string; quote?: { price: number; changePercent: number };
+  delta?: number | 'new' | null;
 }
 export interface BuzzBoard {
   generatedAt: string; window: string; subreddits: string[]; postsScanned: number;
@@ -122,6 +123,13 @@ export interface BuzzBoard {
 }
 export interface BuzzBrief {
   provider: string; fellBack: boolean; text: string; generatedAt: string; boardGeneratedAt: string; cached: boolean;
+}
+export interface PredictionEvent {
+  title: string; query: string; volume: number; endDate: string;
+  topMarket: { question: string; pct: number; volume: number } | null;
+}
+export interface PredictionsBoard {
+  generatedAt: string; source: string; queries: string[]; available: boolean; events: PredictionEvent[];
 }
 export interface ResearchNote {
   symbol: string; provider: string; fellBack: boolean; text: string; generatedAt: string; cached: boolean;

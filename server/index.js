@@ -11,6 +11,7 @@ import { generateStockInsight } from './lib/insight.js';
 import { generateResearchNote } from './lib/research.js';
 import { generateOutlook } from './lib/outlook.js';
 import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
+import { getMarketPredictions } from './lib/predictions.js';
 import { generateMarketBrief, getMoversBoard, getCommoditiesBoard } from './lib/brief.js';
 import { getMacroBoard, generateMacroBrief } from './lib/macro.js';
 import { getFactorBoard, generateFactorBrief } from './lib/factors.js';
@@ -316,6 +317,11 @@ app.get('/api/social/buzz', wrap(async (req, res) => {
   res.json(await getRedditBuzz());
 }));
 
+// Polymarket crowd odds on macro/market events (keyless, 1h cache).
+app.get('/api/social/predictions', wrap(async (req, res) => {
+  res.json(await getMarketPredictions());
+}));
+
 // AI synthesis of the buzz board ("Retail Pulse"). Cached per board snapshot.
 app.post('/api/ai/buzz-brief', aiLimiter, wrap(async (req, res) => {
   if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
@@ -583,5 +589,14 @@ app.listen(PORT, () => {
   console.log(`  Finnhub: ${process.env.FINNHUB_API_KEY ? 'configured' : 'MISSING'}  |  AI: ${process.env.AI_PROVIDER || 'claude'} → ${process.env.AI_FALLBACK_PROVIDER || 'gemini'}`);
   const warming = startWarmer();
   const backups = startBackups();
-  console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}  |  DB backups: ${backups ? 'daily (keep 7)' : 'off'}\n`);
+  // Keep the Reddit buzz board fresh so rank-change history accumulates even
+  // without traffic. Off with the warmer (dev/preview) to stay quiet locally.
+  let buzzing = false;
+  if (process.env.WARMER_DISABLED !== '1') {
+    buzzing = true;
+    const refresh = () => getRedditBuzz({ force: true }).catch(() => {});
+    setTimeout(refresh, 90_000); // after boot, clear of the warmer's first pass
+    setInterval(refresh, 50 * 60_000);
+  }
+  console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}  |  Buzz history: ${buzzing ? 'on (50min)' : 'off'}  |  DB backups: ${backups ? 'daily (keep 7)' : 'off'}\n`);
 });
