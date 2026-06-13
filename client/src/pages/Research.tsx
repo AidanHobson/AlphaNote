@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from 'react';
-import { deleteJSON, getJSON, postJSON } from '../lib/api';
+import { deleteJSON, getJSON, postJSON, streamJSON } from '../lib/api';
 import type { ResearchNote, OutlookNote, BuzzBoard, BuzzBrief, PredictionsBoard, ThemeRadarNote, MonopolyNote, MonopolyRadarNote, HistoryNote } from '../lib/models';
 import AIText from '../components/AIText';
 import Tabs from '../components/Tabs';
@@ -40,6 +40,7 @@ export default function Research() {
   const [monoRadarError, setMonoRadarError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [streamText, setStreamText] = useState('');
   const [historyBump, setHistoryBump] = useState(0);
 
   const [buzz, setBuzz] = useState<BuzzBoard | null>(null);
@@ -60,41 +61,39 @@ export default function Research() {
     if (isOutlook && !predictions) getJSON<PredictionsBoard>('/api/social/predictions').then(setPredictions).catch(() => {});
   }, [isOutlook, buzz, predictions]);
 
+  // Stream an AI note: text appears token-by-token; the final `done` carries the
+  // authoritative note (with metadata) that replaces the streamed buffer.
+  const streamNote = (kind: 'research' | 'outlook' | 'monopoly', topic: string, force: boolean) => {
+    setLoading(true); setError(''); setStreamText('');
+    setInput(topic);
+    if (!force) { if (kind === 'monopoly') setMonopoly(null); else if (kind === 'outlook') setOutlook(null); else setNote(null); }
+    const path = kind === 'monopoly' ? '/api/ai/monopoly/stream' : kind === 'outlook' ? '/api/ai/outlook/stream' : '/api/ai/research/stream';
+    const body = kind === 'outlook' ? { topic, force } : { symbol: topic.toUpperCase(), topic: topic.toUpperCase(), force };
+    streamJSON<ResearchNote & OutlookNote & MonopolyNote>(path, body, {
+      onDelta: (chunk) => setStreamText((t) => t + chunk),
+      onDone: (note) => {
+        setStreamText('');
+        if (kind === 'monopoly') setMonopoly(note as unknown as MonopolyNote);
+        else if (kind === 'outlook') setOutlook(note as unknown as OutlookNote);
+        else setNote(note as unknown as ResearchNote);
+        setHistoryBump((x) => x + 1);
+        setLoading(false);
+      },
+      onError: (m) => { setError(m); setStreamText(''); setLoading(false); },
+    });
+  };
+
   const run = (raw: string, force = false) => {
     const topic = raw.trim();
     if (!topic || loading) return;
-    setLoading(true); setError('');
-    setInput(topic);
-    if (isMonopoly) {
-      if (!force) setMonopoly(null);
-      postJSON<MonopolyNote>('/api/ai/monopoly', { topic: topic.toUpperCase(), force })
-        .then((n) => { setMonopoly(n); setHistoryBump((x) => x + 1); })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
-    } else if (isOutlook) {
-      if (!force) setOutlook(null);
-      postJSON<OutlookNote>('/api/ai/outlook', { topic, force })
-        .then((n) => { setOutlook(n); setHistoryBump((x) => x + 1); })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
-    } else {
-      if (!force) setNote(null);
-      postJSON<ResearchNote>('/api/ai/research', { symbol: topic.toUpperCase(), force })
-        .then((n) => { setNote(n); setHistoryBump((x) => x + 1); })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
-    }
+    streamNote(isMonopoly ? 'monopoly' : isOutlook ? 'outlook' : 'research', topic, force);
   };
 
-  // Jump from a board row into a Deep-research note (switches tab + runs).
+  // Jump from a board row into a Deep-research note (switches tab + streams).
   const deepDive = (symbol: string) => {
     if (loading) return;
     setMode(MODES[0]);
-    setInput(symbol); setLoading(true); setError(''); setNote(null);
-    postJSON<ResearchNote>('/api/ai/research', { symbol })
-      .then((n) => { setNote(n); setHistoryBump((x) => x + 1); })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    streamNote('research', symbol, false);
   };
 
   const runBrief = (force = false) => {
@@ -192,8 +191,16 @@ export default function Research() {
 
       {loading && !active && (
         <div className="ai-panel">
-          <div className="ai-head"><span className="spark">✦</span><h3>{isMonopoly ? 'Drafting monopoly profile…' : isOutlook ? 'Drafting speculative outlook…' : 'Drafting research note…'}</h3></div>
-          <div className="ai-body"><SkeletonLines lines={12} /></div>
+          <div className="ai-head">
+            <span className="spark">✦</span>
+            <h3>{isMonopoly ? 'Drafting monopoly profile…' : isOutlook ? 'Drafting speculative outlook…' : 'Drafting research note…'}</h3>
+            {streamText && <span className="pill accent streaming-pill" style={{ marginLeft: 'auto' }}>streaming…</span>}
+          </div>
+          <div className="ai-body">
+            {streamText
+              ? <><AIText text={streamText} /><span className="stream-caret">▍</span></>
+              : <SkeletonLines lines={12} />}
+          </div>
         </div>
       )}
 

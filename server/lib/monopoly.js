@@ -177,7 +177,7 @@ const NOTE_TTL = 3600_000;
 let radarCache = { t: 0, note: null };
 const RADAR_TTL = 6 * 3600_000;
 
-export async function generateMonopolyNote(rawTopic, { force = false } = {}) {
+export async function generateMonopolyNote(rawTopic, { force = false, onDelta } = {}) {
   const sym = String(rawTopic || '').trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(sym)) {
     throw Object.assign(new Error('Monopoly profiles are per-ticker — enter a symbol, or use the radar to discover names.'), { statusCode: 400 });
@@ -209,7 +209,7 @@ export async function generateMonopolyNote(rawTopic, { force = false } = {}) {
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
 
   const prompt = buildMonopolyPrompt({ symbol: sym, quote, profile, valuation, fundamentals, history, spyStats, nextEarnings, insiders, smartMoney, shortVol, pulse, webLines });
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_PROMPT, { maxTokens: 2300 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, MONOPOLY_PROMPT, { maxTokens: 2300, onDelta });
 
   const note = {
     topic: sym,

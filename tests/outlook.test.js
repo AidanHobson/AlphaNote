@@ -1,4 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import { deltaFromEvent } from '../server/lib/ai-provider.js';
+
+describe('deltaFromEvent (streaming delta extraction)', () => {
+  it('extracts Anthropic content_block_delta text and ignores other events', () => {
+    expect(deltaFromEvent('claude', { type: 'content_block_delta', delta: { text: 'Mono' } })).toBe('Mono');
+    expect(deltaFromEvent('claude', { type: 'message_start' })).toBe('');
+    expect(deltaFromEvent('claude', { type: 'content_block_delta', delta: {} })).toBe('');
+  });
+  it('extracts Gemini candidate part text', () => {
+    expect(deltaFromEvent('gemini', { candidates: [{ content: { parts: [{ text: 'poly' }] } }] })).toBe('poly');
+    expect(deltaFromEvent('gemini', { candidates: [] })).toBe('');
+    expect(deltaFromEvent('gemini', {})).toBe('');
+  });
+});
+
 import { THEME_PROMPT, STOCK_OUTLOOK_PROMPT, buildThemePrompt, buildStockOutlookPrompt, isTickerLike } from '../server/lib/outlook.js';
 
 describe('outlook system prompts', () => {

@@ -50,7 +50,12 @@ app.disable('x-powered-by');
 // to the number of hops). Off by default so a directly-exposed server can't be
 // fooled by spoofed X-Forwarded-For (rate-limit keying) or X-Forwarded-Proto.
 app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false);
-app.use(compression()); // gzip responses (the data endpoints ship large JSON)
+// gzip responses (the data endpoints ship large JSON) — but never buffer SSE.
+app.use(compression({
+  filter: (req, res) => (String(res.getHeader('Content-Type') || '').includes('text/event-stream')
+    ? false
+    : compression.filter(req, res)),
+}));
 app.use(express.json({ limit: '256kb' }));
 
 // Content-Security-Policy: lock script/style/connect sources to 'self' plus the
@@ -116,6 +121,37 @@ function requireFinnhub(res) {
     return false;
   }
   return true;
+}
+
+// Server-Sent-Events helper for streaming AI notes. Runs generate({ onDelta }),
+// emitting each text chunk as it arrives, then a final `done` event carrying the
+// full note (authoritative metadata + history save). A cached note arrives as a
+// single `done`. Errors arrive as an `error` event, not a thrown HTTP status,
+// because the SSE headers are already on the wire.
+function streamNote(req, res, { scope, generate, save, errorMessage }) {
+  if (!isProviderConfigured('claude') && !isProviderConfigured('gemini')) {
+    return res.status(503).json({ error: 'AI unavailable: no AI provider key configured.' });
+  }
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform'); // no-transform disables gzip buffering
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable proxy buffering (Render)
+  res.flushHeaders?.();
+  const send = (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+
+  generate({ onDelta: (chunk) => send({ delta: chunk }) })
+    .then((note) => {
+      if (!note.cached && save) { try { save(note); } catch { /* history is non-fatal */ } }
+      send({ done: true, note });
+      res.end();
+    })
+    .catch((err) => {
+      const status = err.statusCode || 502;
+      console.error(`${scope} stream failed:`, err.message);
+      recordError(scope, err, { path: req.path });
+      send({ error: [400, 404, 503].includes(status) ? err.message : errorMessage });
+      res.end();
+    });
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -327,6 +363,26 @@ app.get('/api/notes/history/:id', (req, res) => {
 app.delete('/api/notes/history/:id', (req, res) => {
   res.json({ ok: notesHistory.delete(req.user.id, req.params.id) });
 });
+
+// ── Streaming AI notes (SSE) — text appears as it generates ──────────────────
+app.post('/api/ai/research/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'research',
+  errorMessage: 'The AI providers could not generate a research note right now. Please try again.',
+  generate: ({ onDelta }) => generateResearchNote(req.body?.symbol, { force: req.body?.force === true, onDelta }),
+  save: (note) => notesHistory.save(req.user.id, { kind: 'research', topic: note.symbol, title: `${note.data.name} (${note.symbol})`, provider: note.provider, text: note.text, meta: note }),
+}));
+app.post('/api/ai/outlook/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'outlook',
+  errorMessage: 'The AI providers could not generate an outlook right now. Please try again.',
+  generate: ({ onDelta }) => generateOutlook(req.body?.topic, { force: req.body?.force === true, onDelta }),
+  save: (note) => notesHistory.save(req.user.id, { kind: 'outlook', topic: note.topic, title: note.mode === 'stock' ? `${note.data.name} (${note.topic.toUpperCase()})` : note.topic, provider: note.provider, text: note.text, meta: note }),
+}));
+app.post('/api/ai/monopoly/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'monopoly',
+  errorMessage: 'The AI providers could not generate the monopoly profile right now. Please try again.',
+  generate: ({ onDelta }) => generateMonopolyNote(req.body?.topic, { force: req.body?.force === true, onDelta }),
+  save: (note) => notesHistory.save(req.user.id, { kind: 'monopoly', topic: note.topic, title: `${note.data.name} (${note.topic})`, provider: note.provider, text: note.text, meta: note }),
+}));
 
 // ── Reddit buzz: trending tickers across finance subreddits (keyless) ────────
 app.get('/api/social/buzz', wrap(async (req, res) => {

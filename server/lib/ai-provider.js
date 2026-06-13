@@ -41,10 +41,47 @@ function getFallbackName(primary) {
   return primary === 'claude' ? 'gemini' : 'claude';
 }
 
+// ── Streaming helpers ────────────────────────────────────────────────────────
+
+// Pull the incremental text out of one parsed SSE event for each provider.
+// Pure + exported so the stream parsing is unit-tested.
+export function deltaFromEvent(provider, evt) {
+  if (provider === 'gemini') return evt?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Anthropic: text arrives as content_block_delta with delta.text.
+  return evt?.type === 'content_block_delta' ? (evt.delta?.text || '') : '';
+}
+
+// Read an SSE response body, parse `data:` lines, and feed each provider delta
+// to onDelta. Returns the full accumulated text.
+async function consumeSSE(res, provider, onDelta) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let evt;
+      try { evt = JSON.parse(payload); } catch { continue; }
+      const piece = deltaFromEvent(provider, evt);
+      if (piece) { text += piece; onDelta(piece); }
+    }
+  }
+  return text;
+}
+
 // ── Provider implementations ────────────────────────────────────────────────
 
 async function callClaude(prompt, system, config, opts = {}) {
   if (!config.apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+  const streaming = typeof opts.onDelta === 'function';
 
   const res = await fetch(`${config.baseUrl}/messages`, {
     method: 'POST',
@@ -57,6 +94,7 @@ async function callClaude(prompt, system, config, opts = {}) {
       model: config.model,
       // 700 suits the short reads; long-form callers (research notes) raise it.
       max_tokens: opts.maxTokens || 700,
+      stream: streaming || undefined,
       // System prompt is marked cacheable (prompt caching) since it's reused
       // across every insight request — cheaper + faster on repeat calls.
       system: system
@@ -71,16 +109,24 @@ async function callClaude(prompt, system, config, opts = {}) {
     throw new Error(`Claude API error: ${res.status} ${res.statusText} ${body.slice(0, 300)}`);
   }
 
+  if (streaming) {
+    const text = await consumeSSE(res, 'claude', opts.onDelta);
+    if (!text.trim()) throw new Error('Claude returned empty response');
+    return text.trim();
+  }
+
   const data = await res.json();
   const text = data?.content?.[0]?.text;
   if (!text) throw new Error('Claude returned empty response');
   return text.trim();
 }
 
-async function callGemini(prompt, system, config) {
+async function callGemini(prompt, system, config, opts = {}) {
   if (!config.apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const streaming = typeof opts.onDelta === 'function';
 
-  const url = `${config.baseUrl}/${config.model}:generateContent?key=${config.apiKey}`;
+  const method = streaming ? 'streamGenerateContent' : 'generateContent';
+  const url = `${config.baseUrl}/${config.model}:${method}?key=${config.apiKey}${streaming ? '&alt=sse' : ''}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -95,6 +141,12 @@ async function callGemini(prompt, system, config) {
     throw new Error(`Gemini API error: ${res.status} ${res.statusText} ${body.slice(0, 300)}`);
   }
 
+  if (streaming) {
+    const text = await consumeSSE(res, 'gemini', opts.onDelta);
+    if (!text.trim()) throw new Error('Gemini returned empty response');
+    return text.trim();
+  }
+
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Gemini returned empty response');
@@ -103,7 +155,7 @@ async function callGemini(prompt, system, config) {
 
 async function callProvider(prompt, system, providerName, opts = {}) {
   const config = getProviderConfig(providerName);
-  if (config.name === 'gemini') return callGemini(prompt, system, config);
+  if (config.name === 'gemini') return callGemini(prompt, system, config, opts);
   return callClaude(prompt, system, config, opts);
 }
 

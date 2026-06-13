@@ -208,7 +208,7 @@ export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fun
 const noteCache = new Map();
 const NOTE_TTL = 3600_000;
 
-export async function generateResearchNote(symbol, { force = false } = {}) {
+export async function generateResearchNote(symbol, { force = false, onDelta } = {}) {
   const sym = String(symbol || '').trim().toUpperCase();
   if (!sym) throw new Error('A stock symbol is required');
   if (!/^[A-Z0-9.\-]{1,12}$/.test(sym)) throw new Error('Invalid symbol.');
@@ -242,7 +242,7 @@ export async function generateResearchNote(symbol, { force = false } = {}) {
 
   const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats });
   // A full note runs ~550 words; give the model ample output budget so it never truncates mid-section.
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600, onDelta });
 
   const note = {
     symbol: sym,

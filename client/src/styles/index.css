@@ -235,6 +235,10 @@ button { font-family: inherit; }
 .ticker-link:hover { text-decoration-style: solid; }
 .ai-mdtable { margin: 8px 0 14px; }
 .ai-mdtable td, .ai-mdtable th { padding: 7px 10px; }
+.stream-caret { display: inline-block; color: var(--color-accent); animation: blink 1s step-start infinite; font-weight: 700; }
+.streaming-pill { animation: pulse-fade 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes pulse-fade { 50% { opacity: 0.5; } }
 .ai-foot { padding: 0 16px 14px; color: var(--color-text-muted); font-size: 11.5px; }
 
 /* ── Skeleton / states ──────────────────────────────────────────────────── */

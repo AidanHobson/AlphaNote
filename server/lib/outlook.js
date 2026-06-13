@@ -169,7 +169,7 @@ export const isTickerLike = (topic) => /^[A-Za-z][A-Za-z0-9.\-]{0,9}$/.test(topi
 const cache = new Map();
 const TTL = 3600_000;
 
-export async function generateOutlook(rawTopic, { force = false } = {}) {
+export async function generateOutlook(rawTopic, { force = false, onDelta } = {}) {
   const topic = String(rawTopic || '').trim().replace(/\s+/g, ' ');
   if (!topic) throw Object.assign(new Error('A theme or ticker is required.'), { statusCode: 400 });
   if (topic.length > 60 || !/^[A-Za-z0-9 .&\-/+']+$/.test(topic)) {
@@ -243,7 +243,7 @@ export async function generateOutlook(rawTopic, { force = false } = {}) {
     system = THEME_PROMPT;
   }
 
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, system, { maxTokens: 2300 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, system, { maxTokens: 2300, onDelta });
 
   const note = {
     topic,
