@@ -3,7 +3,7 @@
 // ratings, EDGAR TTM fundamentals + FY history, 1Y price history, insider
 // filings) and asks the analyst for a structured, evidence-led note.
 
-import { getQuote, getCompanyProfile, getNews, getNextEarnings } from './finnhub.js';
+import { getQuote, getCompanyProfile, getNews, getNextEarnings, getBasicFinancials } from './finnhub.js';
 import { getAnalystRatings } from './analyst.js';
 import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
@@ -34,7 +34,7 @@ The 2-3 drivers material enough to move the investment case. For each: one bulle
 Bullets on the trajectory (use the fiscal-year history), current TTM profitability, and cash conversion. If operating cash flow diverges materially from net income (below roughly 0.8x), flag it as an earnings-quality question; if it is healthy, say so in one clause.
 
 **Valuation context**
-Use the derived multiples when provided (P/E, P/S, P/B, EV/EBITDA, FCF yield — always cite them as "derived"), set them against the 1-year absolute and SPY-relative price move and the fundamental trajectory, and say whether the market appears to be paying for growth, quality, or recovery. If the derived block is missing, say "insufficient data for a valuation view" and move on.
+Use the multiples when provided: the AlphaNote-derived block (P/E, P/S, P/B, EV/EBITDA, FCF yield — always cite as "derived") AND the market block (trailing P/E, forward P/E, PEG — cite as "market"). Anchor the read on three things: the trailing P/E (what the market pays today), the forward P/E versus trailing (what it expects earnings to do), and the PEG (whether the price is justified by the growth — flag a PEG well above 1 as paying up, and don't trust a low PEG if the growth looks one-off). Set all of it against the 1-year absolute and SPY-relative price move and the fundamental trajectory, and say whether the market appears to be paying for growth, quality, or recovery. If both blocks are missing, say "insufficient data for a valuation view" and move on.
 
 **Peer comparables**
 When peer multiples are provided, render a short markdown table — | Ticker | P/E | P/S | EV/EBITDA | — with the subject and its peers, then one line on whether the subject trades at a premium or discount to the set and what that implies. All figures are derived; if no peer data is provided, omit this section.
@@ -77,7 +77,29 @@ export function computeValuation(profile, fundamentals) {
   };
 }
 
-export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats, peerComps }) {
+// Market-based valuation multiples from Finnhub basic financials. Distinct from
+// computeValuation's SEC-derived block: forward P/E and PEG use consensus
+// estimates, so the note can contrast what the market PAYS today (trailing P/E)
+// with what it EXPECTS (forward P/E) and the price of that growth (PEG). Returns
+// null when the listing has no usable metrics (common for ADRs / ETFs).
+export function marketMultiples(metric) {
+  if (!metric) return null;
+  const num = (v) => (Number.isFinite(v) ? Number(Number(v).toFixed(2)) : null);
+  const out = {
+    pe: num(metric.peTTM ?? metric.peBasicExclExtraTTM),
+    forwardPE: num(metric.forwardPE),
+    peg: num(metric.pegTTM),
+    forwardPeg: num(metric.forwardPEG),
+    epsTTM: num(metric.epsTTM),
+    epsGrowthTTMYoy: num(metric.epsGrowthTTMYoy),
+    epsGrowth5Y: num(metric.epsGrowth5Y),
+    revenueGrowthTTMYoy: num(metric.revenueGrowthTTMYoy),
+  };
+  if (out.pe == null && out.forwardPE == null && out.peg == null && out.forwardPeg == null) return null;
+  return out;
+}
+
+export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -154,6 +176,21 @@ export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fun
     if (v.fcf != null) lines.push(`- Free cash flow (OCF − capex): ${fmtUsd(v.fcf)}${v.fcfYield != null ? `; FCF yield: ${v.fcfYield}%` : ''}`);
   }
 
+  if (marketMult) {
+    const mm = marketMult;
+    lines.push('');
+    lines.push('Market valuation multiples (Finnhub; these are market/consensus figures, NOT AlphaNote-derived — cite them as "market"):');
+    if (mm.pe != null) lines.push(`- Trailing P/E (TTM): ${mm.pe}x${mm.epsTTM != null ? ` on TTM EPS ${mm.epsTTM}` : ''}`);
+    if (mm.forwardPE != null) lines.push(`- Forward P/E: ${mm.forwardPE}x (on consensus forward EPS; a forward P/E below the trailing P/E means the market expects EPS to grow, and by roughly how much)`);
+    if (mm.peg != null) lines.push(`- PEG (trailing): ${mm.peg} (trailing P/E ÷ earnings-growth rate; ~1 is fairly priced for its growth, >1 is paying up, <1 is cheap relative to growth — only trust it if the growth looks durable)`);
+    if (mm.forwardPeg != null) lines.push(`- PEG (forward): ${mm.forwardPeg} (uses consensus forward growth)`);
+    const g = [];
+    if (mm.epsGrowthTTMYoy != null) g.push(`EPS TTM YoY ${mm.epsGrowthTTMYoy}%`);
+    if (mm.epsGrowth5Y != null) g.push(`EPS 5Y CAGR ${mm.epsGrowth5Y}%`);
+    if (mm.revenueGrowthTTMYoy != null) g.push(`revenue TTM YoY ${mm.revenueGrowthTTMYoy}%`);
+    if (g.length) lines.push(`- Growth context behind the PEG: ${g.join(', ')}`);
+  }
+
   if (nextEarnings?.date) {
     const hour = nextEarnings.hour === 'bmo' ? ' (before market open)' : nextEarnings.hour === 'amc' ? ' (after market close)' : '';
     const eps = nextEarnings.epsEstimate != null ? `; street EPS estimate ${nextEarnings.epsEstimate}` : '';
@@ -225,7 +262,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const hit = noteCache.get(sym);
   if (!force && hit && Date.now() - hit.t < NOTE_TTL) return { ...hit.note, cached: true };
 
-  const [quote, profile, news, ratings, fundamentals, history, insiderData, nextEarnings, smartMoney, spyHistory] = await Promise.all([
+  const [quote, profile, news, ratings, fundamentals, history, insiderData, nextEarnings, smartMoney, spyHistory, metric] = await Promise.all([
     getQuote(sym),
     getCompanyProfile(sym),
     getNews([sym]).catch(() => []),
@@ -236,6 +273,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
     getNextEarnings(sym),
     findSymbolAcrossManagers(sym).catch(() => null),
     isEodhdConfigured() ? getPriceHistory('SPY').catch(() => null) : Promise.resolve(null),
+    getBasicFinancials(sym).catch(() => null),
   ]);
 
   if (!quote || quote.c == null || quote.c === 0) {
@@ -247,11 +285,12 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const allTxns = Array.isArray(insiderData) ? insiderData : insiderData?.transactions || [];
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
   const valuation = computeValuation(profile, fundamentals);
+  const marketMult = marketMultiples(metric);
   const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
   // Relative-valuation context (best-effort; cached peer multiples are free).
   const peerComps = await getPeerComps(sym, profile).catch(() => []);
 
-  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats, peerComps });
+  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps });
   // A full note runs ~550 words; give the model ample output budget so it never truncates mid-section.
   const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600, onDelta });
 
@@ -272,6 +311,9 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
       hasHistory: Boolean(history?.available),
       insiderCount: insiders.length,
       hasValuation: Boolean(valuation),
+      valuationMultiples: marketMult
+        ? { pe: marketMult.pe, forwardPE: marketMult.forwardPE, peg: marketMult.peg, forwardPeg: marketMult.forwardPeg }
+        : null,
       managers13F: smartMoney?.length ?? 0,
       nextEarnings: nextEarnings?.date || null,
       peerCount: Math.max(0, (peerComps?.length ?? 0) - 1),

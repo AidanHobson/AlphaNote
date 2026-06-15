@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SYSTEM_PROMPT, buildResearchPrompt, computeValuation } from '../server/lib/research.js';
+import { SYSTEM_PROMPT, buildResearchPrompt, computeValuation, marketMultiples } from '../server/lib/research.js';
 
 const quote = { c: 100, d: 2, dp: 2.04, l: 97, h: 101, o: 98, pc: 98 };
 const profile = { name: 'Acme Corp', finnhubIndustry: 'Software', exchange: 'NASDAQ', country: 'US', currency: 'USD', marketCapitalization: 5000 };
@@ -69,6 +69,22 @@ describe('buildResearchPrompt', () => {
     expect(p).not.toContain('Net income by quarter'); // empty series → omitted
   });
 
+  it('includes the market multiples block (trailing P/E, forward P/E, PEG) when provided', () => {
+    const marketMult = marketMultiples({ peTTM: 34.88, forwardPE: 33.39, pegTTM: 2.76, forwardPEG: 2.43, epsTTM: 8.27, epsGrowthTTMYoy: 29.01, epsGrowth5Y: 17.91 });
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], marketMult });
+    expect(p).toContain('Market valuation multiples');
+    expect(p).toContain('Trailing P/E (TTM): 34.88x on TTM EPS 8.27');
+    expect(p).toContain('Forward P/E: 33.39x');
+    expect(p).toContain('PEG (trailing): 2.76');
+    expect(p).toContain('PEG (forward): 2.43');
+    expect(p).toContain('EPS TTM YoY 29.01%');
+  });
+
+  it('omits the market multiples block when no valuation metrics are present', () => {
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], marketMult: null });
+    expect(p).not.toContain('Market valuation multiples');
+  });
+
   it('includes the derived valuation block with EV, multiples, and FCF yield', () => {
     const valuation = computeValuation({ marketCapitalization: 50_000 }, fundamentals); // $50B cap
     const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals, history: null, insiders: [], valuation });
@@ -131,5 +147,20 @@ describe('computeValuation', () => {
     expect(computeValuation({ marketCapitalization: 50_000 }, null)).toBeNull();
     const lossCo = { available: true, lineItems: [{ key: 'netIncome', current: { value: -1e9 } }] };
     expect(computeValuation({ marketCapitalization: 50_000 }, lossCo).pe).toBeNull();
+  });
+});
+
+describe('marketMultiples', () => {
+  it('extracts and rounds trailing P/E, forward P/E and PEG from Finnhub basic financials', () => {
+    const m = marketMultiples({ peTTM: 34.8842, forwardPE: 33.38937, pegTTM: 2.75635, forwardPEG: 2.42832, epsTTM: 8.2666, epsGrowthTTMYoy: 29.01 });
+    expect(m).toMatchObject({ pe: 34.88, forwardPE: 33.39, peg: 2.76, forwardPeg: 2.43, epsTTM: 8.27, epsGrowthTTMYoy: 29.01 });
+  });
+  it('falls back to peBasicExclExtraTTM when peTTM is missing', () => {
+    expect(marketMultiples({ peBasicExclExtraTTM: 20.5 }).pe).toBe(20.5);
+  });
+  it('returns null when no P/E or PEG fields are present (e.g. an ADR/ETF with sparse metrics)', () => {
+    expect(marketMultiples(null)).toBeNull();
+    expect(marketMultiples({})).toBeNull();
+    expect(marketMultiples({ revenueGrowthTTMYoy: 5 })).toBeNull();
   });
 });

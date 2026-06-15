@@ -231,6 +231,14 @@ export default function Research() {
             <button className="icon-btn" style={{ width: 30, height: 30, marginLeft: 8 }} title="Regenerate (bypasses the 1h cache)"
               onClick={() => run(note.symbol, true)} disabled={loading}>↻</button>
           </div>
+          {note.data.valuationMultiples && (note.data.valuationMultiples.pe != null || note.data.valuationMultiples.forwardPE != null || note.data.valuationMultiples.peg != null) && (
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'baseline', padding: '8px 16px', borderTop: '1px solid var(--color-border)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              {note.data.valuationMultiples.pe != null && <span>P/E <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.pe}x</b></span>}
+              {note.data.valuationMultiples.forwardPE != null && <span>Forward P/E <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.forwardPE}x</b></span>}
+              {note.data.valuationMultiples.peg != null && <span title="Trailing P/E ÷ earnings-growth rate">PEG <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.peg}</b></span>}
+              <span style={{ color: 'var(--color-text-muted)', fontSize: 11.5 }}>market multiples · Finnhub · forward = consensus</span>
+            </div>
+          )}
           <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
             <AIText text={note.text} onTicker={(s) => run(s)} />
           </div>
@@ -238,6 +246,7 @@ export default function Research() {
             AI-generated · {providerLabel(note.provider)}{note.fellBack ? ' (primary unavailable)' : ''}
             {' · '}sources: live quote{note.data.hasFundamentals ? ', SEC EDGAR fundamentals + quarterly trend' : ''}
             {note.data.hasValuation ? ', derived multiples' : ''}
+            {note.data.valuationMultiples ? ', market P/E + forward P/E + PEG' : ''}
             {note.data.hasHistory ? ', 1Y price history vs SPY' : ''}, news, analyst ratings
             {(note.data.peerCount ?? 0) > 0 ? `, ${note.data.peerCount} peer comp${(note.data.peerCount ?? 0) > 1 ? 's' : ''}` : ''}
             {(note.data.managers13F ?? 0) > 0 ? `, ${note.data.managers13F} 13F manager${(note.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}

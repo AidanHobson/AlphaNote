@@ -87,6 +87,21 @@ export async function getNextEarnings(symbol, { patienceMs } = {}) {
   }
 }
 
+// Basic financials (Finnhub free tier) — a wide block of market-based metrics
+// including trailing P/E (peTTM), forwardPE, pegTTM and forwardPEG. These reflect
+// the market/consensus, so they complement the SEC-derived multiples. Cached 12h
+// since they move slowly relative to a quote.
+export async function getBasicFinancials(symbol, { patienceMs } = {}) {
+  try {
+    const url = `${BASE_URL}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${getToken()}`;
+    const data = await cached(`metric:${symbol}`, 43200, () => fetchJSON(url, { patienceMs }));
+    return data?.metric || null;
+  } catch (e) {
+    console.error('Error fetching basic financials for', symbol, e.message);
+    return null;
+  }
+}
+
 export async function getCompanyProfile(symbol, { patienceMs } = {}) {
   try {
     const url = `${BASE_URL}/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
