@@ -26,6 +26,15 @@ export const CHINA_TECH = [
   'LI', 'XPEV', 'NIO', 'TME', 'FUTU', 'BEKE',
 ];
 
+// Chinese robotics & autonomy — the US-listed, Finnhub-quotable subset only.
+// The marquee humanoid/industrial names (UBTECH 9880.HK, Horizon 9660.HK,
+// RoboSense, Estun, Inovance, Siasun) are HK/A-share listed, so the app can't
+// quote them, FINRA short volume doesn't cover them, and SEC has no filings —
+// they live in the speculative "China Robotics" outlook (labelled general
+// knowledge), not here. What IS US-listed is the autonomy/sensor layer: robotaxi
+// (Pony.ai, WeRide), lidar (Hesai), and autonomous aerial (EHang).
+export const CHINA_ROBOTICS = ['HSAI', 'PONY', 'WRD', 'EH'];
+
 // Each component is 0..1, deliberately interpretable. Insider buying is the
 // highest-quality signal here, so it carries the most weight.
 const WEIGHTS = { attention: 0.25, squeeze: 0.25, momentum: 0.15, insider: 0.35 };
@@ -102,7 +111,7 @@ export async function getResearchShortlist({ force = false } = {}) {
     getRedditBuzz().catch(() => null),
     getInsiderTransactions().catch(() => null),
     getShortVolumeMap().catch(() => ({ map: null })),
-    getWatchlistData(CHINA_TECH).catch(() => []),
+    getWatchlistData([...CHINA_TECH, ...CHINA_ROBOTICS]).catch(() => []),
   ]);
 
   // Score every symbol's open-market insider activity, market-wide.
@@ -136,9 +145,10 @@ export async function getResearchShortlist({ force = false } = {}) {
     .slice(0, 8);
   const moverBySym = new Map(movers.map((m) => [m.symbol, m]));
 
-  // Fourth source: the curated Chinese-tech ADR universe, quoted in bulk
-  // (fail-fast). Only names that actually quote are kept, so it degrades to
-  // however many the free tier returns.
+  // Fourth & fifth sources: the curated Chinese tech and robotics/autonomy ADR
+  // universes, quoted in bulk (fail-fast). Only names that actually quote are
+  // kept, so it degrades to however many the free tier returns.
+  const roboSet = new Set(CHINA_ROBOTICS);
   const chinaItems = (Array.isArray(chinaQuotes) ? chinaQuotes : []).filter((q) => q && q.price > 0);
   const chinaBySym = new Map(chinaItems.map((q) => [q.symbol, q]));
 
@@ -159,11 +169,12 @@ export async function getResearchShortlist({ force = false } = {}) {
     const cn = chinaBySym.get(sym);
     const sv = svMap?.get(sym);
     // Source precedence: Reddit attention (richest signal) wins, then insider
-    // buying, then a US mover, then the curated China universe.
+    // buying, then a US mover, then the curated China universes (robotics vs
+    // tech kept as distinct labels; the two lists are disjoint).
     const source = b ? 'trending'
       : insiderBuy.includes(sym) && !m && !cn ? 'insider buying'
       : m ? 'big mover'
-      : cn ? 'china tech'
+      : cn ? (roboSet.has(sym) ? 'china robotics' : 'china tech')
       : 'trending';
     return {
       symbol: sym,

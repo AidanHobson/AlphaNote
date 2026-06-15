@@ -54,6 +54,18 @@ describe('scoreCandidate', () => {
     expect(c.tags).toContain('65% short');
     expect(c.score).toBeGreaterThan(0);
   });
+
+  it('a US-listed Chinese robotics ADR ranks on momentum, carrying its own source label', () => {
+    const c = scoreCandidate(
+      { symbol: 'EH', mentions: 0, source: 'china robotics', rising: false, quote: { changePercent: 17 } },
+      null,
+      20,
+    );
+    expect(c.source).toBe('china robotics');
+    expect(c.components.attention).toBe(0);
+    expect(c.components.momentum).toBeGreaterThan(0);
+    expect(c.score).toBeGreaterThan(0);
+  });
 });
 
 describe('buildScreener', () => {
