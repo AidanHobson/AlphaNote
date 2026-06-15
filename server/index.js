@@ -178,6 +178,17 @@ app.get('/api/health', (req, res) => {
       },
     },
     warmer: warmerStatus(),
+    // Operational signals so an external uptime monitor can alert on more than
+    // up/down: when the newest backup is, and any data source that's failing.
+    backups: (() => {
+      try {
+        const list = listBackups();
+        return { count: list.length, newestAt: list[0]?.createdAt ?? null };
+      } catch { return { count: 0, newestAt: null }; }
+    })(),
+    sources: listSourceHealth()
+      .filter((s) => s.status === 'failing' || s.status === 'stale')
+      .map((s) => ({ name: s.name, status: s.status })),
   });
 });
 

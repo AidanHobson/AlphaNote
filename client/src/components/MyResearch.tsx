@@ -94,7 +94,7 @@ export default function MyResearch({ refreshKey, onRestore, onDelete }: {
                 <td style={{ fontWeight: 600 }}>{n.title}</td>
                 <td className="num">{n.conviction != null ? `${n.conviction}/5` : '—'}</td>
                 <td className="num" onClick={(e) => e.stopPropagation()}>
-                  <button className="icon-btn" style={{ width: 28, height: 28 }} title="Delete this note"
+                  <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Delete note: ${n.title}`} title="Delete this note"
                     onClick={async () => { if (await onDelete(n.id)) { setItems((cur) => cur?.filter((x) => x.id !== n.id) ?? cur); setSelected((s) => { const next = new Set(s); next.delete(n.id); return next; }); } }}>
                     🗑
                   </button>

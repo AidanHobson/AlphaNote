@@ -192,15 +192,15 @@ export default function Research() {
       {error && <div className="error-banner">{error}</div>}
 
       {loading && !active && (
-        <div className="ai-panel">
+        <div className="ai-panel" aria-busy="true">
           <div className="ai-head">
             <span className="spark">✦</span>
             <h3>{isMonopoly ? 'Drafting monopoly profile…' : isOutlook ? 'Drafting speculative outlook…' : 'Drafting research note…'}</h3>
             {streamText && <span className="pill accent streaming-pill" style={{ marginLeft: 'auto' }}>streaming…</span>}
           </div>
-          <div className="ai-body">
+          <div className="ai-body" aria-live="polite">
             {streamText
-              ? <><AIText text={streamText} /><span className="stream-caret">▍</span></>
+              ? <><AIText text={streamText} /><span className="stream-caret" aria-hidden="true">▍</span></>
               : <>
                   {streamStatus && <div style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 10 }}>{streamStatus}</div>}
                   <SkeletonLines lines={12} />

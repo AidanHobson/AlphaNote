@@ -83,6 +83,7 @@ export default function BuzzBoardCard({ buzz, loading, right, onOutlook, onDeepD
               <td className="num">{b.engagement.toLocaleString()}</td>
               <td className="num" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                 <button className="icon-btn" style={{ width: 28, height: 28 }}
+                  aria-label={isInWatchlist(b.symbol) ? `Remove ${b.symbol} from watchlist` : `Add ${b.symbol} to watchlist`}
                   title={isInWatchlist(b.symbol) ? 'Remove from watchlist' : 'Add to watchlist'}
                   onClick={() => { const added = toggleWatchlist(b.symbol); toast(added ? `${b.symbol} added to watchlist` : `${b.symbol} removed from watchlist`); }}>
                   {isInWatchlist(b.symbol) ? '★' : '☆'}
