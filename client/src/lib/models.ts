@@ -155,6 +155,17 @@ export interface PredictionEvent {
   title: string; query: string; volume: number; endDate: string;
   topMarket: { question: string; pct: number; volume: number } | null;
 }
+export interface ScreenerCandidate {
+  symbol: string; name: string | null; quote: { price: number; changePercent: number } | null;
+  score: number;
+  components: { attention: number; squeeze: number; momentum: number; insider: number };
+  tags: string[];
+}
+export interface ResearchShortlist {
+  available: boolean; reason?: string; generatedAt?: string;
+  weights?: { attention: number; squeeze: number; momentum: number; insider: number };
+  candidates?: ScreenerCandidate[];
+}
 export interface Digest {
   generatedAt: string; watchlistCount: number; empty: boolean;
   trending: { symbol: string; rank: number; shortVol: number | null; rising: boolean }[];

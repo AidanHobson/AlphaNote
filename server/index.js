@@ -13,6 +13,7 @@ import { generateOutlook } from './lib/outlook.js';
 import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { getMarketPredictions } from './lib/predictions.js';
 import { getSignalPerformance } from './lib/backtest.js';
+import { getResearchShortlist } from './lib/screener.js';
 import { generateThemeRadar } from './lib/radar.js';
 import { generateMonopolyNote, generateMonopolyRadar } from './lib/monopoly.js';
 import { notesHistory } from './lib/notes-history.js';
@@ -449,6 +450,12 @@ app.get('/api/social/predictions', wrap(async (req, res) => {
 // calibration. Answers "do these signals actually work?". 3h cache.
 app.get('/api/social/performance', wrap(async (req, res) => {
   res.json(await getSignalPerformance());
+}));
+
+// Research-priority screener — ranks live candidates by composite signal
+// strength (what to RESEARCH, not what to buy). 30min cache.
+app.get('/api/social/screener', wrap(async (req, res) => {
+  res.json(await getResearchShortlist());
 }));
 
 // Monopoly research: per-ticker structural-monopoly profile + discovery radar.

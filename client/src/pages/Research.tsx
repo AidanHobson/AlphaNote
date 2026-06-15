@@ -7,6 +7,7 @@ import { SkeletonLines } from '../components/Skeleton';
 import BuzzBoardCard from '../components/BuzzBoardCard';
 import PredictionsCard from '../components/PredictionsCard';
 import SignalPerformance from '../components/SignalPerformance';
+import ResearchShortlist from '../components/ResearchShortlist';
 import RetailPulsePanel from '../components/RetailPulsePanel';
 import ThemeRadarPanel from '../components/ThemeRadarPanel';
 import MonopolyRadarPanel from '../components/MonopolyRadarPanel';
@@ -16,7 +17,7 @@ import { providerLabel } from '../lib/format';
 
 const MODES = ['Deep research', 'Speculative outlook', 'Monopoly research'];
 const RESEARCH_PILLS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'XOM'];
-const OUTLOOK_PILLS = ['Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'AI Bottlenecks', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
+const OUTLOOK_PILLS = ['Lithography', 'Memory', 'Photonics', 'Robotics', 'Energy', 'AI Picks & Shovels', 'AI Bottlenecks', 'Quantum Computing', 'Space', 'Defense Tech', 'GLP-1'];
 // Seed universe from the monopoly mandate, spanning the cap tiers: mega/large
 // anchors (EUV, ratings, .com registry, credit scores, life-sciences cloud,
 // gov SaaS, sole-source aero), then the small/micro names where the alpha lives.
@@ -355,6 +356,7 @@ export default function Research() {
                 {!brief && !briefBusy && <button className="btn sm primary" onClick={() => runBrief()}>✦ Retail Pulse</button>}
               </div>}
             />
+            <ResearchShortlist onResearch={(s) => run(s)} />
             <PredictionsCard predictions={predictions} />
             <SignalPerformance />
           </>
