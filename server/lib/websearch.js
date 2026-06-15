@@ -12,7 +12,20 @@ const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 const TTL = 12 * 3600_000;
 const cache = new Map();
 
-const strip = (s) => String(s).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+// Snippet text extraction. Strip tags to a fixed point, then decode entities in
+// a SINGLE pass (callback, so `&amp;` can't be double-unescaped), then drop any
+// stray angle brackets so no `<script` can survive — satisfies CodeQL
+// js/double-escaping and js/incomplete-multi-character-sanitization. (Output is
+// only ever React-escaped / fed to prompts, never innerHTML.)
+const ENTITY = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", '#039': "'", '#x27': "'" };
+const decodeEntities = (s) => String(s).replace(/&(amp|lt|gt|quot|apos|#0?39|#x27);/g, (m, e) => ENTITY[e] ?? m);
+const strip = (s) => {
+  let text = String(s);
+  let prev;
+  do { prev = text; text = text.replace(/<[^>]*>/g, ''); } while (text !== prev);
+  text = decodeEntities(text);
+  return text.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+};
 
 export function parseLiteResults(html, count = 5) {
   const links = [...String(html).matchAll(/<a[^>]*href=['"]([^'"]*)['"][^>]*class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>/g)];
