@@ -3,7 +3,7 @@ import express from 'express';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cached } from './lib/apicache.js';
 
 import { getQuote, getCompanyProfile, getWatchlistData, getNews, searchStocks } from './lib/finnhub.js';
@@ -720,7 +720,11 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Something went wrong on our end. Please try again.' });
 });
 
-app.listen(PORT, () => {
+// Export the configured app so route tests can mount it with supertest; only
+// bind the port (and start the warmer/backups/refresher) when run directly.
+export default app;
+const isEntry = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isEntry) app.listen(PORT, () => {
   console.log(`\n  AlphaNote API → http://localhost:${PORT}  (${isProd ? 'production: serving client/dist' : 'dev: API only, run Vite separately'})`);
   console.log(`  Finnhub: ${process.env.FINNHUB_API_KEY ? 'configured' : 'MISSING'}  |  AI: ${process.env.AI_PROVIDER || 'claude'} → ${process.env.AI_FALLBACK_PROVIDER || 'gemini'}`);
   const warming = startWarmer();
