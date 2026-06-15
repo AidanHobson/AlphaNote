@@ -28,6 +28,7 @@ import { listManagers, getManagerBoard } from './lib/smartmoney.js';
 import { startBackups, runBackupNow, listBackups, backupDir } from './lib/backup.js';
 import { recordError, listErrors } from './lib/errlog.js';
 import { listSourceHealth } from './lib/source-health.js';
+import { aiBudget } from './lib/ai-budget.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -139,6 +140,9 @@ function streamNote(req, res, { scope, generate, save, errorMessage }) {
   res.setHeader('X-Accel-Buffering', 'no'); // disable proxy buffering (Render)
   res.flushHeaders?.();
   const send = (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+  // Immediate status so the pre-stream gathering phase shows progress, not a
+  // static skeleton; cleared as soon as the first generated token arrives.
+  send({ status: 'Gathering live data (filings, prices, signals)…' });
 
   generate({ onDelta: (chunk) => send({ delta: chunk }) })
     .then((note) => {
@@ -249,6 +253,10 @@ app.use('/api', (req, res, next) => {
   if (attachUser(req)) return next();
   res.status(401).json({ error: 'Authentication required. Please log in.' });
 });
+
+// Per-user daily AI budget — isolates the shared provider spend across users
+// (the per-IP aiLimiter can't). Applies to every AI generation route.
+app.use('/api/ai', aiBudget);
 
 // ── Per-user state (watchlist + notes) ────────────────────────────────────────
 app.get('/api/user/state', (req, res) => res.json(getUserState(req.user.id)));

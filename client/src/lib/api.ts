@@ -40,6 +40,7 @@ export interface StreamHandlers<T> {
   onDelta: (chunk: string) => void;
   onDone: (note: T) => void;
   onError: (message: string) => void;
+  onStatus?: (message: string) => void;
 }
 
 // POST + consume a Server-Sent-Events stream of an AI note: `delta` chunks as
@@ -74,11 +75,12 @@ export async function streamJSON<T>(path: string, body: unknown, h: StreamHandle
     for (const ev of events) {
       const dataLine = ev.split('\n').find((l) => l.startsWith('data:'));
       if (!dataLine) continue;
-      let payload: { delta?: string; done?: boolean; note?: T; error?: string };
+      let payload: { delta?: string; done?: boolean; note?: T; error?: string; status?: string };
       try { payload = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
       if (payload.error) h.onError(payload.error);
       else if (payload.done && payload.note) h.onDone(payload.note);
       else if (payload.delta) h.onDelta(payload.delta);
+      else if (payload.status) h.onStatus?.(payload.status);
     }
   }
 }

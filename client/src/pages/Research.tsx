@@ -41,6 +41,7 @@ export default function Research() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [streamText, setStreamText] = useState('');
+  const [streamStatus, setStreamStatus] = useState('');
   const [historyBump, setHistoryBump] = useState(0);
 
   const [buzz, setBuzz] = useState<BuzzBoard | null>(null);
@@ -64,22 +65,23 @@ export default function Research() {
   // Stream an AI note: text appears token-by-token; the final `done` carries the
   // authoritative note (with metadata) that replaces the streamed buffer.
   const streamNote = (kind: 'research' | 'outlook' | 'monopoly', topic: string, force: boolean) => {
-    setLoading(true); setError(''); setStreamText('');
+    setLoading(true); setError(''); setStreamText(''); setStreamStatus('');
     setInput(topic);
     if (!force) { if (kind === 'monopoly') setMonopoly(null); else if (kind === 'outlook') setOutlook(null); else setNote(null); }
     const path = kind === 'monopoly' ? '/api/ai/monopoly/stream' : kind === 'outlook' ? '/api/ai/outlook/stream' : '/api/ai/research/stream';
     const body = kind === 'outlook' ? { topic, force } : { symbol: topic.toUpperCase(), topic: topic.toUpperCase(), force };
     streamJSON<ResearchNote & OutlookNote & MonopolyNote>(path, body, {
-      onDelta: (chunk) => setStreamText((t) => t + chunk),
+      onStatus: (s) => setStreamStatus(s),
+      onDelta: (chunk) => { setStreamStatus(''); setStreamText((t) => t + chunk); },
       onDone: (note) => {
-        setStreamText('');
+        setStreamText(''); setStreamStatus('');
         if (kind === 'monopoly') setMonopoly(note as unknown as MonopolyNote);
         else if (kind === 'outlook') setOutlook(note as unknown as OutlookNote);
         else setNote(note as unknown as ResearchNote);
         setHistoryBump((x) => x + 1);
         setLoading(false);
       },
-      onError: (m) => { setError(m); setStreamText(''); setLoading(false); },
+      onError: (m) => { setError(m); setStreamText(''); setStreamStatus(''); setLoading(false); },
     });
   };
 
@@ -199,7 +201,10 @@ export default function Research() {
           <div className="ai-body">
             {streamText
               ? <><AIText text={streamText} /><span className="stream-caret">▍</span></>
-              : <SkeletonLines lines={12} />}
+              : <>
+                  {streamStatus && <div style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 10 }}>{streamStatus}</div>}
+                  <SkeletonLines lines={12} />
+                </>}
           </div>
         </div>
       )}
