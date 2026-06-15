@@ -29,6 +29,17 @@ describe('scoreCandidate', () => {
     expect(c.score).toBeLessThan(15);
     expect(c.tags).toEqual([]);
   });
+
+  it('carries the candidate source (trending vs off-board insider buying)', () => {
+    expect(scoreCandidate({ symbol: 'GME', mentions: 5 }, null, 20).source).toBe('trending');
+    expect(scoreCandidate({ symbol: 'XYZ', mentions: 0, source: 'insider buying' }, buyCluster, 20).source).toBe('insider buying');
+  });
+
+  it('an off-board insider-buy name (no mentions) still ranks on the insider signal', () => {
+    const c = scoreCandidate({ symbol: 'XYZ', mentions: 0, source: 'insider buying' }, buyCluster, 20);
+    expect(c.components.attention).toBe(0);
+    expect(c.score).toBeGreaterThan(30); // insider weight 0.35 × 1.0 = 35
+  });
 });
 
 describe('buildScreener', () => {

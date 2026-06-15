@@ -157,7 +157,7 @@ export interface PredictionEvent {
 }
 export interface ScreenerCandidate {
   symbol: string; name: string | null; quote: { price: number; changePercent: number } | null;
-  score: number;
+  source: 'trending' | 'insider buying' | 'big mover'; score: number;
   components: { attention: number; squeeze: number; momentum: number; insider: number };
   tags: string[];
 }

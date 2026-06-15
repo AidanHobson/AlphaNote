@@ -8,6 +8,8 @@
 
 import { getRedditBuzz } from './buzz.js';
 import { getInsiderTransactions } from './insider.js';
+import { getShortVolumeMap } from './shortvol.js';
+import { getWarmSnapshot } from './warmer.js';
 import { scoreInsiderActivity } from './analytics.js';
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -57,6 +59,7 @@ export function scoreCandidate(item, insiderScore, maxMentions) {
     symbol: item.symbol,
     name: item.name || null,
     quote: item.quote || null,
+    source: item.source || 'trending',
     score: Math.round(composite * 100),
     components: {
       attention: Math.round(attention * 100),
@@ -83,29 +86,71 @@ const TTL = 30 * 60_000;
 export async function getResearchShortlist({ force = false } = {}) {
   if (!force && cache.data && Date.now() - cache.t < TTL) return cache.data;
 
-  const [board, insiderData] = await Promise.all([
+  const [board, insiderData, shortVol] = await Promise.all([
     getRedditBuzz().catch(() => null),
     getInsiderTransactions().catch(() => null),
+    getShortVolumeMap().catch(() => ({ map: null })),
   ]);
-  if (!board?.available || !board.items?.length) {
-    return { available: false, reason: 'The trending board is unavailable, so there are no live candidates to rank right now.' };
-  }
 
-  // Score each board symbol's open-market insider activity.
+  // Score every symbol's open-market insider activity, market-wide.
   const txns = Array.isArray(insiderData) ? insiderData : insiderData?.transactions || [];
-  const bySym = new Map();
+  const grouped = new Map();
   for (const t of txns) {
     const sym = String(t.symbol || '').toUpperCase();
     if (!sym) continue;
-    (bySym.get(sym) || bySym.set(sym, []).get(sym)).push(t);
+    if (!grouped.has(sym)) grouped.set(sym, []);
+    grouped.get(sym).push(t);
   }
-  const insiderBySymbol = new Map([...bySym].map(([sym, rows]) => [sym, scoreInsiderActivity(rows)]));
+  const insiderBySymbol = new Map([...grouped].map(([sym, rows]) => [sym, scoreInsiderActivity(rows)]));
+
+  // Candidate universe = Reddit-trending names ∪ names insiders are BUYING
+  // (cluster / net buying) market-wide — broadening past retail attention to
+  // where any signal is firing, including names off the board entirely.
+  const buzzItems = board?.items || [];
+  const buzzBySym = new Map(buzzItems.map((b) => [b.symbol, b]));
+  const insiderBuy = [...insiderBySymbol]
+    .filter(([, sc]) => sc.label.includes('buy'))
+    .sort((a, b) => b[1].buyValue - a[1].buyValue)
+    .map(([sym]) => sym)
+    .slice(0, 12);
+
+  // Third source: the biggest daily movers from the warmer's snapshot (free —
+  // no new Finnhub calls). Reliably broadens the universe to large/mid-cap
+  // momentum names beyond the Reddit penny-stock crowd.
+  const movers = (getWarmSnapshot('movers')?.items || [])
+    .filter((m) => m && m.price > 0)
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+    .slice(0, 8);
+  const moverBySym = new Map(movers.map((m) => [m.symbol, m]));
+
+  const symbols = [...new Set([...buzzItems.map((b) => b.symbol), ...insiderBuy, ...movers.map((m) => m.symbol)])];
+  if (!symbols.length) {
+    return { available: false, reason: 'No live candidates from the trending board, insider filings, or movers right now.' };
+  }
+
+  const svMap = shortVol?.map;
+  const items = symbols.map((sym) => {
+    const b = buzzBySym.get(sym);
+    const m = moverBySym.get(sym);
+    const sv = svMap?.get(sym);
+    return {
+      symbol: sym,
+      name: b?.name || m?.name || null,
+      mentions: b?.mentions || 0,
+      rising: b?.rising || false,
+      shortVol: sv ? { ratio: sv.ratio, date: sv.date } : (b?.shortVol || null),
+      // Prefer the buzz quote; otherwise the mover's quote (off-board insider
+      // names skip quote enrichment to avoid extra Finnhub quota).
+      quote: b?.quote || (m ? { price: m.price, changePercent: m.changePercent } : null),
+      source: b ? 'trending' : insiderBuy.includes(sym) && !m ? 'insider buying' : 'big mover',
+    };
+  });
 
   const data = {
     available: true,
     generatedAt: new Date().toISOString(),
     weights: WEIGHTS,
-    candidates: buildScreener(board, insiderBySymbol).slice(0, 12),
+    candidates: buildScreener({ items }, insiderBySymbol).slice(0, 15),
   };
   cache = { t: Date.now(), data };
   return data;
