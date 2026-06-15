@@ -7,6 +7,23 @@ type Status = 'pending' | 'active' | 'disabled';
 interface AdminUser { id: number; username: string; createdAt: number; status: Status; isAdmin: boolean; }
 interface Backup { name: string; bytes: number; createdAt: number; }
 interface ErrEntry { t: number; scope: string; message: string; path?: string; status?: number; }
+interface SourceHealth {
+  name: string; status: 'ok' | 'degraded' | 'failing' | 'stale' | 'unknown';
+  lastOkAt: number | null; lastFailAt: number | null; lastError: string | null;
+  successes: number; failures: number; recentFailRate: number;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  hackernews: 'Hacker News', polymarket: 'Polymarket', reddit: 'Reddit',
+  finra: 'FINRA short volume', websearch: 'Web search (market sizes)',
+};
+const sourceStatusStyle: Record<SourceHealth['status'], React.CSSProperties> = {
+  ok: { color: 'var(--color-up)' },
+  degraded: { color: 'var(--color-warn)' },
+  failing: { color: 'var(--color-down)' },
+  stale: { color: 'var(--color-warn)' },
+  unknown: { color: 'var(--color-text-muted)' },
+};
 
 const fmtBytes = (b: number) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
@@ -25,8 +42,10 @@ export default function Admin() {
   const [backupErr, setBackupErr] = useState('');
 
   const [errors, setErrors] = useState<ErrEntry[] | null>(null);
+  const [sources, setSources] = useState<SourceHealth[] | null>(null);
 
   const load = useCallback(() => {
+    getJSON<{ sources: SourceHealth[] }>('/api/admin/sources').then((d) => setSources(d.sources)).catch(() => setSources([]));
     getJSON<{ users: AdminUser[] }>('/api/admin/users').then((d) => setUsers(d.users)).catch((e) => setError(e.message));
     getJSON<{ backups: Backup[] }>('/api/admin/backups').then((d) => setBackups(d.backups)).catch((e) => setBackupErr(e.message));
     getJSON<{ errors: ErrEntry[] }>('/api/admin/errors').then((d) => setErrors(d.errors)).catch(() => setErrors([]));
@@ -144,8 +163,31 @@ export default function Admin() {
             </table>
           )}
           <div style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 10 }}>
-            In-memory ring buffer (last 100, secrets redacted) — clears on restart/deploy.
+            Persisted to SQLite (last 500, secrets redacted) — survives restarts.
           </div>
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Card title="Data source health" sub="keyless scrapers the speculative layer depends on — third-party markup or IP blocks can degrade a source silently">
+          {!sources ? <SkeletonLines lines={3} /> : sources.length === 0 ? (
+            <div className="empty" style={{ border: 'none' }}>No sources exercised yet — generate an outlook or open the trending board to populate this.</div>
+          ) : (
+            <table className="mtable">
+              <thead><tr><th>Source</th><th>Status</th><th className="num">Last OK</th><th className="num">Recent fail rate</th><th>Last error</th></tr></thead>
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.name} style={{ cursor: 'default' }}>
+                    <td style={{ fontWeight: 600 }}>{SOURCE_LABEL[s.name] || s.name}</td>
+                    <td style={{ fontWeight: 700, ...sourceStatusStyle[s.status] }}>{s.status.toUpperCase()}</td>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>{s.lastOkAt ? new Date(s.lastOkAt).toLocaleTimeString() : '—'}</td>
+                    <td className="num">{s.recentFailRate > 0 ? `${Math.round(s.recentFailRate * 100)}%` : '0%'}</td>
+                    <td style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{s.lastError || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       </div>
     </div>

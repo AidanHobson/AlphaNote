@@ -6,6 +6,7 @@
 
 import { boundedSet } from './utils.js';
 import kv from './kvcache.js';
+import { recordOutcome } from './source-health.js';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 const TTL = 12 * 3600_000;
@@ -49,7 +50,8 @@ export async function searchSnippets(query, { count = 4 } = {}) {
     });
     clearTimeout(timer);
     if (res.ok) results = parseLiteResults(await res.text(), count);
-  } catch { /* keyless best-effort — notes fall back to labelled estimates */ }
+    recordOutcome('websearch', res.ok);
+  } catch (err) { recordOutcome('websearch', false, err?.message); /* notes fall back to labelled estimates */ }
 
   boundedSet(cache, key, { t: Date.now(), data: results }, 200);
   if (results.length) kv.set(`web:${key}`, results, TTL);

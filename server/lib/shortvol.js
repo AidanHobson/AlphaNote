@@ -4,6 +4,8 @@
 // this is daily SHORT VOLUME (flow), not short interest (outstanding stock);
 // the prompt and UI label it accordingly. Typical large-cap baseline ~40-50%.
 
+import { recordOutcome } from './source-health.js';
+
 export function parseShortVolume(text) {
   const map = new Map();
   for (const line of String(text).split('\n')) {
@@ -38,10 +40,12 @@ export async function getShortVolumeMap() {
       const map = parseShortVolume(await res.text());
       if (map.size > 1000) { // sanity: a real trading-day file covers thousands of symbols
         cache = { t: Date.now(), map, date: ymd };
+        recordOutcome('finra', true);
         return cache;
       }
     } catch { /* try the previous day */ }
   }
+  recordOutcome('finra', false, 'no usable short-volume file in the last 6 days');
   return { t: 0, map: null, date: null };
 }
 

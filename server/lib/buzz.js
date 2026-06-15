@@ -11,6 +11,7 @@ import { getWatchlistData } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { snapshotBoard, attachDeltas } from './buzz-history.js';
 import { getShortVolumeMap } from './shortvol.js';
+import { recordOutcome } from './source-health.js';
 import db from './db.js';
 import kv from './kvcache.js';
 
@@ -100,6 +101,9 @@ export async function getRedditBuzz({ force = false } = {}) {
     Promise.all(BUZZ_SUBS.map((sub) => fetchSubPosts(sub, 'day'))),
   ]);
   const posts = weekLists.flat();
+  // Reddit health: a market-wide scan returning zero posts means the listings
+  // are blocked (datacenter IP) — the clearest signal we have.
+  recordOutcome('reddit', posts.length > 0, posts.length ? null : 'no posts from any tracked subreddit (IP block?)');
   let items = mergeTodaySignal(
     aggregateBuzz(posts, universe).slice(0, 15),
     aggregateBuzz(dayLists.flat(), universe),

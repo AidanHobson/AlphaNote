@@ -27,6 +27,7 @@ import { getSizeBoard } from './lib/size.js';
 import { listManagers, getManagerBoard } from './lib/smartmoney.js';
 import { startBackups, runBackupNow, listBackups, backupDir } from './lib/backup.js';
 import { recordError, listErrors } from './lib/errlog.js';
+import { listSourceHealth } from './lib/source-health.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -271,6 +272,7 @@ app.post('/api/admin/users/:id/disable', requireAdmin, (req, res) => {
 
 // ── Admin: recent server errors (in-app ring buffer, redacted) ────────────────
 app.get('/api/admin/errors', requireAdmin, (req, res) => res.json({ errors: listErrors() }));
+app.get('/api/admin/sources', requireAdmin, (req, res) => res.json({ sources: listSourceHealth() }));
 
 // ── Admin: database backups (list / trigger / download a snapshot) ────────────
 app.get('/api/admin/backups', requireAdmin, (req, res) => res.json({ backups: listBackups() }));

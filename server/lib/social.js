@@ -8,6 +8,7 @@
 
 import { boundedSet } from './utils.js';
 import kv from './kvcache.js';
+import { track } from './source-health.js';
 
 const UA = process.env.SEC_USER_AGENT || 'AlphaNote/1.0 (research dashboard)';
 const DAY = 86400;
@@ -269,9 +270,9 @@ export async function getSocialPulse(rawTopic) {
   if (stored) { boundedSet(cache, key, { t: Date.now(), data: stored }, 200); return stored; }
 
   const [hn, pm, rd] = await Promise.all([
-    hackerNews(topic).catch(() => null),
-    polymarket(topic).catch(() => null),
-    reddit(topic).catch(() => null),
+    track('hackernews', () => hackerNews(topic), { emptyIsFailure: false }).catch(() => null),
+    track('polymarket', () => polymarket(topic)).catch(() => null),
+    reddit(topic).catch(() => null), // Reddit health tracked in the buzz scan (clearer signal)
   ]);
 
   const sources = [hn, pm, rd].filter((s) => s && (s.items?.length || s.count));

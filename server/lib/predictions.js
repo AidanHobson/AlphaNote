@@ -4,6 +4,7 @@
 
 import { fetchJSON, parseEventMarkets, toNum } from './social.js';
 import kv from './kvcache.js';
+import { recordOutcome } from './source-health.js';
 
 // The crowd's modal outcome — most-probable market, tie-broken by volume —
 // reads far better than the highest-volume one (often a 0% tail outcome).
@@ -68,6 +69,8 @@ export async function getMarketPredictions({ force = false } = {}) {
   }));
 
   const events = pickEvents(eventsByQuery);
+  // Health: at least one query returning events means Gamma is reachable.
+  recordOutcome('polymarket', eventsByQuery.some((q) => q.events.length > 0), 'gamma-api returned no events for any query');
   const data = {
     generatedAt: new Date().toISOString(),
     source: 'Polymarket (Gamma API)',
