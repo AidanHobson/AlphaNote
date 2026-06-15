@@ -155,6 +155,19 @@ export interface PredictionEvent {
   title: string; query: string; volume: number; endDate: string;
   topMarket: { question: string; pct: number; volume: number } | null;
 }
+export interface BacktestBucket { n: number; avgReturn: number | null; medianReturn: number | null; hitRate: number | null; avgExcess: number | null; winVsSpy: number | null }
+export interface BuzzBacktest {
+  horizonDays: number; signalsConsidered: number; signalsResolved: number; unresolvedSymbols: number;
+  buckets: { all: BacktestBucket; highShort: BacktestBucket; rising: BacktestBucket; topRank: BacktestBucket };
+}
+export interface SignalPerformance {
+  available: boolean; reason?: string; distinctSymbols?: number; pricedSymbols?: number;
+  buzz?: { d5: BuzzBacktest; d20: BuzzBacktest };
+  conviction?: {
+    sampled: number; avgHoldingDays: number | null;
+    bands: { low: { n: number; avgReturn: number | null; hitRate: number | null }; mid: { n: number; avgReturn: number | null; hitRate: number | null }; high: { n: number; avgReturn: number | null; hitRate: number | null } };
+  };
+}
 export interface PredictionsBoard {
   generatedAt: string; source: string; queries: string[]; available: boolean; events: PredictionEvent[];
 }

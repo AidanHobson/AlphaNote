@@ -10,7 +10,7 @@ beforeEach(() => {
   db = new Database(':memory:');
   db.exec(`CREATE TABLE buzz_history (
     snapped_at INTEGER NOT NULL, symbol TEXT NOT NULL, rank INTEGER NOT NULL,
-    mentions INTEGER NOT NULL, engagement INTEGER NOT NULL
+    mentions INTEGER NOT NULL, engagement INTEGER NOT NULL, short_vol REAL, rising INTEGER
   )`);
 });
 
@@ -23,11 +23,17 @@ describe('snapshotBoard', () => {
     const rows = db.prepare('SELECT symbol, rank FROM buzz_history WHERE snapped_at = ?').all(t0);
     expect(rows).toEqual([{ symbol: 'GME', rank: 1 }, { symbol: 'TSLA', rank: 2 }]);
   });
-  it('prunes history older than 30 days', () => {
+  it('prunes history beyond the retention window (~120 days)', () => {
     const now = 1_000_000_000_000;
-    snapshotBoard(db, items('OLD'), now - 31 * 24 * HOUR);
+    snapshotBoard(db, items('OLD'), now - 121 * 24 * HOUR);
     snapshotBoard(db, items('GME'), now);
     expect(db.prepare('SELECT COUNT(*) AS n FROM buzz_history').get().n).toBe(1);
+  });
+  it('persists the short_vol / rising signal attributes', () => {
+    const t0 = 1_000_000_000_000;
+    snapshotBoard(db, [{ symbol: 'GME', mentions: 5, engagement: 50, shortVol: { ratio: 68 }, rising: true }], t0);
+    const row = db.prepare('SELECT short_vol, rising FROM buzz_history WHERE symbol = ?').get('GME');
+    expect(row).toEqual({ short_vol: 68, rising: 1 });
   });
 });
 

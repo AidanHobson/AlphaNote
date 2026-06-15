@@ -6,6 +6,7 @@ import Tabs from '../components/Tabs';
 import { SkeletonLines } from '../components/Skeleton';
 import BuzzBoardCard from '../components/BuzzBoardCard';
 import PredictionsCard from '../components/PredictionsCard';
+import SignalPerformance from '../components/SignalPerformance';
 import RetailPulsePanel from '../components/RetailPulsePanel';
 import ThemeRadarPanel from '../components/ThemeRadarPanel';
 import MonopolyRadarPanel from '../components/MonopolyRadarPanel';
@@ -353,6 +354,7 @@ export default function Research() {
               </div>}
             />
             <PredictionsCard predictions={predictions} />
+            <SignalPerformance />
           </>
         ) : !active && !loading && !error ? (
           <div className="empty">

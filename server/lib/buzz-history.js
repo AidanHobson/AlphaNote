@@ -6,16 +6,16 @@
 const SNAPSHOT_MIN_GAP_MS = 30 * 60_000;   // at most one snapshot per half hour
 const BASELINE_AGE_MS = 12 * 3600_000;     // compare vs the newest snapshot ≥12h old
 const BASELINE_FALLBACK_MS = 60 * 60_000;  // first day: vs the oldest snapshot ≥1h old
-const RETENTION_MS = 30 * 24 * 3600_000;
+const RETENTION_MS = 120 * 24 * 3600_000; // keep ~4mo so the signal track record accumulates
 
 // Record the current board (top items, in rank order). Skips when a snapshot
 // was taken recently, so cache rebuilds don't spam history.
 export function snapshotBoard(db, items, now = Date.now()) {
   const last = db.prepare('SELECT MAX(snapped_at) AS t FROM buzz_history').get()?.t || 0;
   if (now - last < SNAPSHOT_MIN_GAP_MS) return false;
-  const insert = db.prepare('INSERT INTO buzz_history (snapped_at, symbol, rank, mentions, engagement) VALUES (?, ?, ?, ?, ?)');
+  const insert = db.prepare('INSERT INTO buzz_history (snapped_at, symbol, rank, mentions, engagement, short_vol, rising) VALUES (?, ?, ?, ?, ?, ?, ?)');
   const tx = db.transaction(() => {
-    items.forEach((item, i) => insert.run(now, item.symbol, i + 1, item.mentions, item.engagement));
+    items.forEach((item, i) => insert.run(now, item.symbol, i + 1, item.mentions, item.engagement, item.shortVol?.ratio ?? null, item.rising ? 1 : 0));
     db.prepare('DELETE FROM buzz_history WHERE snapped_at < ?').run(now - RETENTION_MS);
   });
   tx();

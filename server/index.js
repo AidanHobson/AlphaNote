@@ -12,6 +12,7 @@ import { generateResearchNote } from './lib/research.js';
 import { generateOutlook } from './lib/outlook.js';
 import { getRedditBuzz, generateBuzzBrief } from './lib/buzz.js';
 import { getMarketPredictions } from './lib/predictions.js';
+import { getSignalPerformance } from './lib/backtest.js';
 import { generateThemeRadar } from './lib/radar.js';
 import { generateMonopolyNote, generateMonopolyRadar } from './lib/monopoly.js';
 import { notesHistory } from './lib/notes-history.js';
@@ -428,6 +429,12 @@ app.get('/api/social/buzz', wrap(async (req, res) => {
 // Polymarket crowd odds on macro/market events (keyless, 1h cache).
 app.get('/api/social/predictions', wrap(async (req, res) => {
   res.json(await getMarketPredictions());
+}));
+
+// Signal performance — forward-return backtest of the buzz signals + conviction
+// calibration. Answers "do these signals actually work?". 3h cache.
+app.get('/api/social/performance', wrap(async (req, res) => {
+  res.json(await getSignalPerformance());
 }));
 
 // Monopoly research: per-ticker structural-monopoly profile + discovery radar.

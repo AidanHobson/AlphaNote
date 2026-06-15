@@ -41,9 +41,12 @@ db.exec(`
     symbol     TEXT NOT NULL,
     rank       INTEGER NOT NULL,
     mentions   INTEGER NOT NULL,
-    engagement INTEGER NOT NULL
+    engagement INTEGER NOT NULL,
+    short_vol  REAL,
+    rising     INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_buzz_history_time ON buzz_history(snapped_at);
+  CREATE INDEX IF NOT EXISTS idx_buzz_history_symbol ON buzz_history(symbol, snapped_at);
   CREATE TABLE IF NOT EXISTS kv_cache (
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,
@@ -78,5 +81,11 @@ db.exec(`
 if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'status')) {
   db.exec(`ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`);
 }
+
+// Migration: add buzz_history.short_vol / rising for the signal backtest. Older
+// rows keep NULL (excluded from the short-vol / rising buckets, counted in 'all').
+const buzzCols = db.prepare('PRAGMA table_info(buzz_history)').all().map((c) => c.name);
+if (!buzzCols.includes('short_vol')) db.exec('ALTER TABLE buzz_history ADD COLUMN short_vol REAL');
+if (!buzzCols.includes('rising')) db.exec('ALTER TABLE buzz_history ADD COLUMN rising INTEGER');
 
 export default db;
