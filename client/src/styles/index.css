@@ -239,6 +239,9 @@ button { font-family: inherit; }
 .compare-col { border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
 .compare-head { padding: 12px 14px; background: var(--color-bg-elevated); border-bottom: 1px solid var(--color-border); }
 .compare-body { padding: 4px 14px 14px; max-height: 520px; overflow-y: auto; font-size: 13.5px; }
+.digest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.digest-h { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; color: var(--color-text-secondary); margin-bottom: 6px; }
+.digest-row { font-size: 13px; padding: 2px 0; }
 .watchlist-hit { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-elevated); font-size: 13px; }
 .watchlist-hit .ticker-link { font-weight: 700; }
 .stream-caret { display: inline-block; color: var(--color-accent); animation: blink 1s step-start infinite; font-weight: 700; }

@@ -155,6 +155,13 @@ export interface PredictionEvent {
   title: string; query: string; volume: number; endDate: string;
   topMarket: { question: string; pct: number; volume: number } | null;
 }
+export interface Digest {
+  generatedAt: string; watchlistCount: number; empty: boolean;
+  trending: { symbol: string; rank: number; shortVol: number | null; rising: boolean }[];
+  insiderBuys: { symbol: string; buyers: number; value: number }[];
+  earningsSoon: { symbol: string; date: string; hour: string | null }[];
+  newOnBoard: { symbol: string; shortVol: number | null }[];
+}
 export interface BacktestBucket { n: number; avgReturn: number | null; medianReturn: number | null; hitRate: number | null; avgExcess: number | null; winVsSpy: number | null }
 export interface BuzzBacktest {
   horizonDays: number; signalsConsidered: number; signalsResolved: number; unresolvedSymbols: number;

@@ -66,12 +66,12 @@ export async function getQuote(symbol, { patienceMs } = {}) {
 }
 
 // Next scheduled earnings report within ~4 months (free-tier calendar endpoint).
-export async function getNextEarnings(symbol) {
+export async function getNextEarnings(symbol, { patienceMs } = {}) {
   try {
     const from = new Date().toISOString().slice(0, 10);
     const to = new Date(Date.now() + 120 * 86400_000).toISOString().slice(0, 10);
     const url = `${BASE_URL}/calendar/earnings?from=${from}&to=${to}&symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
-    const data = await cached(`earnings:${symbol}`, 43200, () => fetchJSON(url));
+    const data = await cached(`earnings:${symbol}`, 43200, () => fetchJSON(url, { patienceMs }));
     const list = (data?.earningsCalendar || []).filter((e) => e?.date).sort((a, b) => a.date.localeCompare(b.date));
     const next = list[0];
     if (!next) return null;

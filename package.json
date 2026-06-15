@@ -14,7 +14,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

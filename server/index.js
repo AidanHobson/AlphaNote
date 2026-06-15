@@ -30,6 +30,8 @@ import { startBackups, runBackupNow, listBackups, backupDir } from './lib/backup
 import { recordError, listErrors } from './lib/errlog.js';
 import { listSourceHealth } from './lib/source-health.js';
 import { aiBudget } from './lib/ai-budget.js';
+import { validateNote, noteKind } from './lib/note-eval.js';
+import { getDigest } from './lib/digest.js';
 import { getIndicators, getEconomicCalendar, generateEconomicBrief, getYieldCurve } from './lib/economy.js';
 import { getMarketValuation, getYields, getValuationTheme, VALUATION_THEMES } from './lib/valuation.js';
 import { getRiskBoard, generateRiskBrief } from './lib/risk.js';
@@ -147,7 +149,16 @@ function streamNote(req, res, { scope, generate, save, errorMessage }) {
 
   generate({ onDelta: (chunk) => send({ delta: chunk }) })
     .then((note) => {
-      if (!note.cached && save) { try { save(note); } catch { /* history is non-fatal */ } }
+      if (!note.cached) {
+        // Quality eval: flag a note that broke its structural contract / rails
+        // so it's visible in the admin error log (the model occasionally does).
+        const kind = noteKind(note);
+        if (kind) {
+          const { ok, issues } = validateNote(kind, note.text);
+          if (!ok) recordError('note-quality', new Error(`${kind} note failed: ${issues.join(', ')}`), { path: req.path });
+        }
+        if (save) { try { save(note); } catch { /* history is non-fatal */ } }
+      }
       send({ done: true, note });
       res.end();
     })
@@ -272,6 +283,9 @@ app.use('/api/ai', aiBudget);
 
 // ── Per-user state (watchlist + notes) ────────────────────────────────────────
 app.get('/api/user/state', (req, res) => res.json(getUserState(req.user.id)));
+
+// Personal daily digest — watchlist names trending / with insider buys / earnings soon.
+app.get('/api/digest', wrap(async (req, res) => res.json(await getDigest(req.user.id))));
 app.put('/api/user/state', (req, res) => {
   const { watchlist, notes } = req.body || {};
   putUserState(req.user.id, watchlist, notes);

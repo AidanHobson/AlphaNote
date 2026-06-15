@@ -6,6 +6,7 @@ import Card from '../components/Card';
 import Tabs from '../components/Tabs';
 import MarketTable from '../components/MarketTable';
 import AIText from '../components/AIText';
+import DigestCard from '../components/DigestCard';
 import Skeleton, { SkeletonLines } from '../components/Skeleton';
 import { formatPct, formatPrice, changeDir, arrow, timeAgo } from '../lib/format';
 
@@ -59,6 +60,8 @@ export default function DailyUpdate() {
         <h1>Daily Update</h1>
         <p>Today's market regime, an AI narrative pulse, and cross-sectional returns.</p>
       </div>
+
+      <DigestCard />
 
       <Tabs tabs={['Live', 'Movers', 'News']} active={tab} onChange={setTab} />
 
