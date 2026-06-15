@@ -11,13 +11,14 @@ const themesOf = (radar: ThemeRadarNote | null) =>
         .filter((t) => t.length <= 60 && !/^bottom line/i.test(t))
     : [];
 
-export default function ThemeRadarPanel({ radar, busy, disabled, onRegen, onTheme, onTicker }: {
+export default function ThemeRadarPanel({ radar, busy, disabled, onRegen, onTheme, onTicker, streamText }: {
   radar: ThemeRadarNote | null;
   busy: boolean;
   disabled: boolean;
   onRegen: () => void;
   onTheme: (topic: string) => void;
   onTicker?: (symbol: string) => void;
+  streamText?: string;
 }) {
   if (!radar && !busy) return null;
   const themes = themesOf(radar);
@@ -34,7 +35,7 @@ export default function ThemeRadarPanel({ radar, busy, disabled, onRegen, onThem
         )}
       </div>
       <div className="ai-body" style={{ opacity: busy ? 0.5 : 1 }}>
-        {radar ? <AIText onTicker={onTicker} text={radar.text} /> : <SkeletonLines lines={10} />}
+        {radar ? <AIText onTicker={onTicker} text={radar.text} /> : streamText ? <><AIText text={streamText} /><span className="stream-caret" aria-hidden="true">▍</span></> : <SkeletonLines lines={10} />}
         {radar && themes.length > 0 && (
           <div className="mgr-pills" style={{ marginTop: 12 }}>
             {themes.map((t) => (

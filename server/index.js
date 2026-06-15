@@ -405,6 +405,21 @@ app.post('/api/ai/monopoly/stream', aiLimiter, (req, res) => streamNote(req, res
   save: (note) => notesHistory.save(req.user.id, { kind: 'monopoly', topic: note.topic, title: `${note.data.name} (${note.topic})`, provider: note.provider, text: note.text, meta: note }),
 }));
 
+// Streaming variants of the auxiliary AI surfaces (radars / brief) — no history
+// save, but the same token-by-token UX as the note streams.
+app.post('/api/ai/theme-radar/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'theme-radar', errorMessage: 'The AI providers could not generate the theme radar right now. Please try again.',
+  generate: ({ onDelta }) => generateThemeRadar({ force: req.body?.force === true, onDelta }),
+}));
+app.post('/api/ai/monopoly-radar/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'monopoly-radar', errorMessage: 'The AI providers could not generate the monopoly radar right now. Please try again.',
+  generate: ({ onDelta }) => generateMonopolyRadar({ force: req.body?.force === true, onDelta }),
+}));
+app.post('/api/ai/buzz-brief/stream', aiLimiter, (req, res) => streamNote(req, res, {
+  scope: 'buzz-brief', errorMessage: 'The AI providers could not generate the Retail Pulse right now. Please try again.',
+  generate: ({ onDelta }) => generateBuzzBrief({ force: req.body?.force === true, onDelta }),
+}));
+
 // ── Reddit buzz: trending tickers across finance subreddits (keyless) ────────
 app.get('/api/social/buzz', wrap(async (req, res) => {
   res.json(await getRedditBuzz());

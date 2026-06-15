@@ -3,11 +3,12 @@ import AIText from './AIText';
 import { SkeletonLines } from './Skeleton';
 import { providerLabel } from '../lib/format';
 
-export default function RetailPulsePanel({ brief, busy, onRegen, onTicker }: {
+export default function RetailPulsePanel({ brief, busy, onRegen, onTicker, streamText }: {
   brief: BuzzBrief | null;
   busy: boolean;
   onRegen: () => void;
   onTicker?: (symbol: string) => void;
+  streamText?: string;
 }) {
   if (!brief && !busy) return null;
   return (
@@ -23,7 +24,7 @@ export default function RetailPulsePanel({ brief, busy, onRegen, onTicker }: {
         )}
       </div>
       <div className="ai-body" style={{ opacity: busy ? 0.5 : 1 }}>
-        {brief ? <AIText onTicker={onTicker} text={brief.text} /> : <SkeletonLines lines={8} />}
+        {brief ? <AIText onTicker={onTicker} text={brief.text} /> : streamText ? <><AIText text={streamText} /><span className="stream-caret" aria-hidden="true">▍</span></> : <SkeletonLines lines={8} />}
       </div>
       {brief && (
         <div className="ai-foot">

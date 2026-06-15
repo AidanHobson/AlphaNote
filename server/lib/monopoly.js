@@ -249,7 +249,7 @@ export function extractRadarTickers(text) {
   )];
 }
 
-export async function generateMonopolyRadar({ force = false } = {}) {
+export async function generateMonopolyRadar({ force = false, onDelta } = {}) {
   if (!force && radarCache.note && Date.now() - radarCache.t < RADAR_TTL) {
     return { ...radarCache.note, cached: true };
   }
@@ -262,7 +262,7 @@ export async function generateMonopolyRadar({ force = false } = {}) {
     lines.push(`Candidates you surfaced on the previous scan (find DIFFERENT names this time): ${previously.join(', ')}.`);
   }
   lines.push('', 'Scout for structural monopolists now, honouring the cap-tier mandate.');
-  const { provider, text, fellBack } = await callAIWithFallback(lines.join('\n'), MONOPOLY_RADAR_PROMPT, { maxTokens: 1900 });
+  const { provider, text, fellBack } = await callAIWithFallback(lines.join('\n'), MONOPOLY_RADAR_PROMPT, { maxTokens: 1900, onDelta });
   const note = { kind: 'monopoly-radar', speculative: true, provider, fellBack, text, generatedAt: new Date().toISOString() };
   radarCache = { t: Date.now(), note };
   return { ...note, cached: false };

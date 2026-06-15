@@ -193,7 +193,7 @@ export function buildBriefPrompt(board) {
 
 let briefCache = { key: '', note: null };
 
-export async function generateBuzzBrief({ force = false } = {}) {
+export async function generateBuzzBrief({ force = false, onDelta } = {}) {
   const board = await getRedditBuzz();
   if (!board.available || !board.items.length) {
     throw Object.assign(new Error('The Reddit board is unavailable right now.'), { statusCode: 503 });
@@ -202,7 +202,7 @@ export async function generateBuzzBrief({ force = false } = {}) {
   if (!force && briefCache.note && briefCache.key === board.generatedAt) {
     return { ...briefCache.note, cached: true };
   }
-  const { provider, text, fellBack } = await callAIWithFallback(buildBriefPrompt(board), BRIEF_PROMPT, { maxTokens: 1100 });
+  const { provider, text, fellBack } = await callAIWithFallback(buildBriefPrompt(board), BRIEF_PROMPT, { maxTokens: 1100, onDelta });
   const note = { provider, fellBack, text, generatedAt: new Date().toISOString(), boardGeneratedAt: board.generatedAt };
   briefCache = { key: board.generatedAt, note };
   return { ...note, cached: false };

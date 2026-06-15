@@ -62,9 +62,18 @@ export async function searchSnippets(query, { count = 4 } = {}) {
 // search yields nothing (the prompts then fall back to vintage-labelled
 // training-data estimates).
 export async function marketSnippetLines(topic) {
-  const results = await searchSnippets(`${topic} market size forecast CAGR`);
-  if (!results.length) return [];
-  const lines = [`Live web search (DuckDuckGo, fetched today) — current market-size/forecast snippets for "${topic}". Prefer and cite these (by source domain) over training-data figures; they are claims by their sources, so present ranges where sources disagree:`];
-  for (const r of results) lines.push(`- "${r.snippet}" (${r.domain || 'unknown source'})`);
+  const results = await searchSnippets(`${topic} market size forecast CAGR`, { count: 6 });
+  // One snippet per domain — a range across DIFFERENT sources is the honest
+  // picture; three quotes from the same research firm are not.
+  const seen = new Set();
+  const distinct = results.filter((r) => {
+    const key = r.domain || r.snippet.slice(0, 30);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+  if (!distinct.length) return [];
+  const lines = [`Live web search (DuckDuckGo, fetched today) — current market-size/forecast snippets for "${topic}" from ${distinct.length} distinct source${distinct.length > 1 ? 's' : ''}. Prefer and cite these (by source domain) over training-data figures; they are claims by their sources, so present the range where sources disagree:`];
+  for (const r of distinct) lines.push(`- "${r.snippet}" (${r.domain || 'unknown source'})`);
   return lines;
 }

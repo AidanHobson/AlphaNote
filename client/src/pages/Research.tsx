@@ -52,6 +52,9 @@ export default function Research() {
   const [radar, setRadar] = useState<ThemeRadarNote | null>(null);
   const [radarBusy, setRadarBusy] = useState(false);
   const [radarError, setRadarError] = useState('');
+  const [briefStream, setBriefStream] = useState('');
+  const [radarStream, setRadarStream] = useState('');
+  const [monoRadarStream, setMonoRadarStream] = useState('');
 
   const [, bumpWatch] = useReducer((x: number) => x + 1, 0);
   useEffect(() => onStorageChange(bumpWatch), []);
@@ -100,29 +103,32 @@ export default function Research() {
 
   const runBrief = (force = false) => {
     if (briefBusy) return;
-    setBriefBusy(true); setBriefError('');
-    postJSON<BuzzBrief>('/api/ai/buzz-brief', { force })
-      .then(setBrief)
-      .catch((e) => setBriefError(e.message))
-      .finally(() => setBriefBusy(false));
+    setBriefBusy(true); setBriefError(''); setBriefStream('');
+    streamJSON<BuzzBrief>('/api/ai/buzz-brief/stream', { force }, {
+      onDelta: (c) => setBriefStream((t) => t + c),
+      onDone: (n) => { setBrief(n); setBriefStream(''); setBriefBusy(false); },
+      onError: (m) => { setBriefError(m); setBriefStream(''); setBriefBusy(false); },
+    });
   };
 
   const runRadar = (force = false) => {
     if (radarBusy) return;
-    setRadarBusy(true); setRadarError('');
-    postJSON<ThemeRadarNote>('/api/ai/theme-radar', { force })
-      .then(setRadar)
-      .catch((e) => setRadarError(e.message))
-      .finally(() => setRadarBusy(false));
+    setRadarBusy(true); setRadarError(''); setRadarStream('');
+    streamJSON<ThemeRadarNote>('/api/ai/theme-radar/stream', { force }, {
+      onDelta: (c) => setRadarStream((t) => t + c),
+      onDone: (n) => { setRadar(n); setRadarStream(''); setRadarBusy(false); },
+      onError: (m) => { setRadarError(m); setRadarStream(''); setRadarBusy(false); },
+    });
   };
 
   const runMonoRadar = (force = false) => {
     if (monoRadarBusy) return;
-    setMonoRadarBusy(true); setMonoRadarError('');
-    postJSON<MonopolyRadarNote>('/api/ai/monopoly-radar', { force })
-      .then(setMonoRadar)
-      .catch((e) => setMonoRadarError(e.message))
-      .finally(() => setMonoRadarBusy(false));
+    setMonoRadarBusy(true); setMonoRadarError(''); setMonoRadarStream('');
+    streamJSON<MonopolyRadarNote>('/api/ai/monopoly-radar/stream', { force }, {
+      onDelta: (c) => setMonoRadarStream((t) => t + c),
+      onDone: (n) => { setMonoRadar(n); setMonoRadarStream(''); setMonoRadarBusy(false); },
+      onError: (m) => { setMonoRadarError(m); setMonoRadarStream(''); setMonoRadarBusy(false); },
+    });
   };
 
   // Reopen a saved note: the meta column holds the original response, so the
@@ -311,7 +317,7 @@ export default function Research() {
       {isMonopoly && (
         <>
           {monoRadarError && <div className="error-banner" style={{ marginTop: 16 }}>{monoRadarError}</div>}
-          <MonopolyRadarPanel radar={monoRadar} busy={monoRadarBusy} disabled={loading} onTicker={(s) => run(s)}
+          <MonopolyRadarPanel radar={monoRadar} busy={monoRadarBusy} streamText={monoRadarStream} disabled={loading} onTicker={(s) => run(s)}
             onRegen={() => runMonoRadar(true)} onProfile={(t) => run(t)} />
           {!monoRadar && !monoRadarBusy && (
             <div className={active || loading ? '' : 'empty'} style={{ marginTop: 16, textAlign: 'center' }}>
@@ -332,10 +338,10 @@ export default function Research() {
         buzz?.available && buzz.items.length ? (
           <>
             {radarError && <div className="error-banner" style={{ marginTop: 16 }}>{radarError}</div>}
-            <ThemeRadarPanel radar={radar} busy={radarBusy} disabled={loading} onTicker={(s) => run(s)}
+            <ThemeRadarPanel radar={radar} busy={radarBusy} streamText={radarStream} disabled={loading} onTicker={(s) => run(s)}
               onRegen={() => runRadar(true)} onTheme={(t) => run(sanitizeTopic(t))} />
             {briefError && <div className="error-banner" style={{ marginTop: 16 }}>{briefError}</div>}
-            <RetailPulsePanel brief={brief} busy={briefBusy} onRegen={() => runBrief(true)} onTicker={(s) => run(s)} />
+            <RetailPulsePanel brief={brief} busy={briefBusy} streamText={briefStream} onRegen={() => runBrief(true)} onTicker={(s) => run(s)} />
             <BuzzBoardCard
               buzz={buzz}
               loading={loading}

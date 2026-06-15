@@ -62,7 +62,7 @@ export function buildRadarPrompt({ hn, buzz, predictions }) {
 let cache = { t: 0, note: null };
 const TTL = 3 * 3600_000;
 
-export async function generateThemeRadar({ force = false } = {}) {
+export async function generateThemeRadar({ force = false, onDelta } = {}) {
   if (!force && cache.note && Date.now() - cache.t < TTL) return { ...cache.note, cached: true };
 
   const [hn, buzz, predictions] = await Promise.all([
@@ -75,7 +75,7 @@ export async function generateThemeRadar({ force = false } = {}) {
   }
 
   const prompt = buildRadarPrompt({ hn, buzz, predictions });
-  const { provider, text, fellBack } = await callAIWithFallback(prompt, RADAR_PROMPT, { maxTokens: 1700 });
+  const { provider, text, fellBack } = await callAIWithFallback(prompt, RADAR_PROMPT, { maxTokens: 1700, onDelta });
 
   const note = {
     provider,
