@@ -235,6 +235,10 @@ button { font-family: inherit; }
 .ticker-link:hover { text-decoration-style: solid; }
 .ai-mdtable { margin: 8px 0 14px; }
 .ai-mdtable td, .ai-mdtable th { padding: 7px 10px; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare-col { border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+.compare-head { padding: 12px 14px; background: var(--color-bg-elevated); border-bottom: 1px solid var(--color-border); }
+.compare-body { padding: 4px 14px 14px; max-height: 520px; overflow-y: auto; font-size: 13.5px; }
 .watchlist-hit { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-elevated); font-size: 13px; }
 .watchlist-hit .ticker-link { font-weight: 700; }
 .stream-caret { display: inline-block; color: var(--color-accent); animation: blink 1s step-start infinite; font-weight: 700; }
