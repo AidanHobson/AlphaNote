@@ -97,6 +97,22 @@ export async function getCompanyProfile(symbol, { patienceMs } = {}) {
   }
 }
 
+// Industry peers for a symbol (Finnhub free tier), excluding itself, capped.
+export async function getPeers(symbol, { limit = 6 } = {}) {
+  try {
+    const url = `${BASE_URL}/stock/peers?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
+    const list = await cached(`peers:${symbol}`, 86400, () => fetchJSON(url));
+    const sym = String(symbol).toUpperCase();
+    return (Array.isArray(list) ? list : [])
+      .map((s) => String(s).toUpperCase())
+      .filter((s) => s && s !== sym)
+      .slice(0, limit);
+  } catch (e) {
+    console.error('Error fetching peers for', symbol, e.message);
+    return [];
+  }
+}
+
 // Combined quote + profile for a set of symbols (used by the watchlist & movers).
 // Concurrency-limited so large baskets don't burst Finnhub's free-tier rate limit.
 export async function getWatchlistData(symbols) {

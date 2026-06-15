@@ -177,5 +177,6 @@ export interface ResearchNote {
     name: string; price: number; change: number; changePercent: number; currency: string; logo: string;
     hasFundamentals: boolean; hasHistory: boolean; insiderCount: number;
     hasValuation?: boolean; managers13F?: number; nextEarnings?: string | null;
+    peerCount?: number; insiderSignal?: string | null;
   };
 }

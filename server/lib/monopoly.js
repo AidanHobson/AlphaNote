@@ -16,6 +16,7 @@ import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
 import { shortVolFor } from './shortvol.js';
 import { marketSnippetLines } from './websearch.js';
+import { scoreInsiderActivity, insiderScoreLine } from './analytics.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
@@ -127,7 +128,8 @@ export function buildMonopolyPrompt({ symbol, quote, profile, valuation, fundame
   if (nextEarnings?.date) lines.push(`Next scheduled earnings: ${nextEarnings.date}.`);
 
   if (insiders?.length) {
-    lines.push(`Recent insider Form 4 filings (open-market only): ${insiders.slice(0, 4).map((t) => `${t.insider || 'Insider'}${t.title ? ` (${t.title})` : ''} ${t.side}${t.value ? ` ~$${Math.round(t.value).toLocaleString('en-US')}` : ''}`).join('; ')}.`);
+    lines.push(insiderScoreLine(scoreInsiderActivity(insiders), symbol));
+    lines.push(`Filings: ${insiders.slice(0, 4).map((t) => `${t.insider || 'Insider'}${t.title ? ` (${t.title})` : ''} ${t.side}${t.value ? ` ~$${Math.round(t.value).toLocaleString('en-US')}` : ''}`).join('; ')}.`);
   }
   if (smartMoney?.length) {
     lines.push(`Tracked 13F managers holding it: ${smartMoney.slice(0, 4).map((p) => `${p.manager} ($${(p.value / 1e9).toFixed(1)}B, ${p.change?.type || 'held'})`).join('; ')}.`);

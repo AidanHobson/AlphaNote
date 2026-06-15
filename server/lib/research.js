@@ -9,6 +9,8 @@ import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
 import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
+import { scoreInsiderActivity, insiderScoreLine, peerCompLines } from './analytics.js';
+import { getPeerComps } from './peers.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
@@ -34,8 +36,11 @@ Bullets on the trajectory (use the fiscal-year history), current TTM profitabili
 **Valuation context**
 Use the derived multiples when provided (P/E, P/S, P/B, EV/EBITDA, FCF yield — always cite them as "derived"), set them against the 1-year absolute and SPY-relative price move and the fundamental trajectory, and say whether the market appears to be paying for growth, quality, or recovery. If the derived block is missing, say "insufficient data for a valuation view" and move on.
 
+**Peer comparables**
+When peer multiples are provided, render a short markdown table — | Ticker | P/E | P/S | EV/EBITDA | — with the subject and its peers, then one line on whether the subject trades at a premium or discount to the set and what that implies. All figures are derived; if no peer data is provided, omit this section.
+
 **Sentiment & positioning**
-What analyst consensus, news tone, insider activity, and any tracked 13F institutional positions imply is already priced in.
+What analyst consensus, news tone, the scored insider signal (weight a multi-insider cluster or officer/director buying more than a lone filing), and any tracked 13F institutional positions imply is already priced in.
 
 **Scenarios**
 Three bullets — Bull, Base, Bear. Each one sentence: what would have to be true, anchored to the drivers above. No invented price targets.
@@ -72,7 +77,7 @@ export function computeValuation(profile, fundamentals) {
   };
 }
 
-export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats }) {
+export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats, peerComps }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -186,10 +191,14 @@ export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fun
     lines.push(`Institutional positioning: ${symbol} does not appear among the top holdings of any of the tracked 13F managers.`);
   }
 
+  const peerLines = peerCompLines(peerComps || []);
+  if (peerLines.length) { lines.push(''); lines.push(...peerLines); }
+
   if (insiders?.length) {
+    const score = scoreInsiderActivity(insiders);
     lines.push('');
-    lines.push(`Recent insider Form 4 filings for ${symbol} (open-market only):`);
-    insiders.slice(0, 5).forEach((t) => {
+    lines.push(insiderScoreLine(score, symbol));
+    insiders.slice(0, 4).forEach((t) => {
       const val = t.value ? ` ~${fmtUsd(t.value)}` : '';
       lines.push(`- ${t.insider || 'Insider'}${t.title ? ` (${t.title})` : ''}: ${t.side}${val}${t.transactionDate ? ` on ${t.transactionDate}` : ''}`);
     });
@@ -239,8 +248,10 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
   const valuation = computeValuation(profile, fundamentals);
   const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
+  // Relative-valuation context (best-effort; cached peer multiples are free).
+  const peerComps = await getPeerComps(sym, profile).catch(() => []);
 
-  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats });
+  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, nextEarnings, smartMoney, spyStats, peerComps });
   // A full note runs ~550 words; give the model ample output budget so it never truncates mid-section.
   const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600, onDelta });
 
@@ -263,6 +274,8 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
       hasValuation: Boolean(valuation),
       managers13F: smartMoney?.length ?? 0,
       nextEarnings: nextEarnings?.date || null,
+      peerCount: Math.max(0, (peerComps?.length ?? 0) - 1),
+      insiderSignal: insiders.length ? scoreInsiderActivity(insiders).label : null,
     },
   };
   boundedSet(noteCache, sym, { t: Date.now(), note }, 100);

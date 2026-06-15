@@ -238,8 +238,10 @@ export default function Research() {
             {' · '}sources: live quote{note.data.hasFundamentals ? ', SEC EDGAR fundamentals + quarterly trend' : ''}
             {note.data.hasValuation ? ', derived multiples' : ''}
             {note.data.hasHistory ? ', 1Y price history vs SPY' : ''}, news, analyst ratings
+            {(note.data.peerCount ?? 0) > 0 ? `, ${note.data.peerCount} peer comp${(note.data.peerCount ?? 0) > 1 ? 's' : ''}` : ''}
             {(note.data.managers13F ?? 0) > 0 ? `, ${note.data.managers13F} 13F manager${(note.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}
             {note.data.insiderCount > 0 ? `, ${note.data.insiderCount} insider filing${note.data.insiderCount > 1 ? 's' : ''}` : ''}
+            {note.data.insiderSignal ? ` · insider: ${note.data.insiderSignal}` : ''}
             {note.data.nextEarnings ? ` · next earnings ${note.data.nextEarnings}` : ''}
             {' · '}generated {new Date(note.generatedAt).toLocaleTimeString()}{note.cached ? ' (cached)' : ''}
             {' · '}analysis, not investment advice
