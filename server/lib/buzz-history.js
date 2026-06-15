@@ -41,3 +41,20 @@ export function attachDeltas(db, items, now = Date.now()) {
   if (changes instanceof Map) return items.map((i) => ({ ...i, delta: null }));
   return items.map((item, i) => ({ ...item, delta: changes.deltaFor(item.symbol, i + 1) }));
 }
+
+// Mention trajectory for one symbol over the recent window — feeds the board's
+// sparklines. One point per snapshot, oldest-first.
+export function symbolSeries(db, symbol, { days = 7, now = Date.now() } = {}) {
+  return db.prepare(
+    'SELECT snapped_at AS t, mentions, rank FROM buzz_history WHERE symbol = ? AND snapped_at >= ? ORDER BY snapped_at ASC',
+  ).all(String(symbol).toUpperCase(), now - days * 24 * 3600_000);
+}
+
+// Attach a compact mentions trend to each board item (only when ≥2 points exist,
+// so the UI doesn't draw a meaningless single dot).
+export function attachTrends(db, items, opts = {}) {
+  return items.map((item) => {
+    const series = symbolSeries(db, item.symbol, opts);
+    return series.length >= 2 ? { ...item, trend: series.map((p) => p.mentions) } : item;
+  });
+}

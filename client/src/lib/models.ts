@@ -118,6 +118,7 @@ export interface BuzzItem {
   name?: string; quote?: { price: number; changePercent: number };
   delta?: number | 'new' | null;
   shortVol?: { ratio: number; date: string };
+  trend?: number[];
 }
 export interface BuzzBoard {
   generatedAt: string; window: string; subreddits: string[]; postsScanned: number;

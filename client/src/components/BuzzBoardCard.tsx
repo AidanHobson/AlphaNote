@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { BuzzBoard } from '../lib/models';
 import Card from './Card';
+import Sparkline from './Sparkline';
 import { toast } from './toast';
-import { isInWatchlist, toggleWatchlist } from '../lib/storage';
+import { isInWatchlist, toggleWatchlist, getWatchlist } from '../lib/storage';
 
 export default function BuzzBoardCard({ buzz, loading, right, onOutlook, onDeepDive }: {
   buzz: BuzzBoard;
@@ -11,6 +12,8 @@ export default function BuzzBoardCard({ buzz, loading, right, onOutlook, onDeepD
   onOutlook: (symbol: string) => void;
   onDeepDive: (symbol: string) => void;
 }) {
+  const watch = new Set(getWatchlist());
+  const onYourList = buzz.items.slice(0, 12).filter((b) => watch.has(b.symbol));
   return (
     <Card
       title="Trending on Reddit"
@@ -18,8 +21,17 @@ export default function BuzzBoardCard({ buzz, loading, right, onOutlook, onDeepD
       style={{ marginTop: 16 }}
       right={right}
     >
+      {onYourList.length > 0 && (
+        <div className="watchlist-hit" style={{ marginBottom: 10 }}>
+          ★ On your watchlist &amp; trending now: {onYourList.map((b) => (
+            <button key={b.symbol} className="ticker-link" style={{ marginRight: 8 }} onClick={() => !loading && onOutlook(b.symbol)}>
+              {b.symbol}{b.shortVol ? ` (${b.shortVol.ratio}% short)` : ''}
+            </button>
+          ))}
+        </div>
+      )}
       <table className="mtable">
-        <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th className="num" title="FINRA daily short volume — share of consolidated volume sold short (flow, not short interest)">Short vol</th><th>Top thread</th><th className="num">Mentions</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>
+        <thead><tr><th>#</th><th>Ticker</th><th className="num">Price</th><th className="num" title="FINRA daily short volume — share of consolidated volume sold short (flow, not short interest)">Short vol</th><th>Top thread</th><th className="num">Mentions</th><th className="num" title="Mentions over the past 7 days">7d trend</th><th className="num">Today</th><th className="num">Engagement</th><th /></tr></thead>
         <tbody>
           {buzz.items.slice(0, 12).map((b, i) => (
             <tr key={b.symbol} role="button" tabIndex={0} title={`Speculative outlook on ${b.symbol}`}
@@ -64,6 +76,9 @@ export default function BuzzBoardCard({ buzz, loading, right, onOutlook, onDeepD
                 )}
               </td>
               <td className="num">{b.mentions}</td>
+              <td className="num" style={{ verticalAlign: 'middle' }} onClick={(e) => e.stopPropagation()}>
+                {b.trend ? <Sparkline data={b.trend} /> : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+              </td>
               <td className="num">{b.today?.mentions || 0}</td>
               <td className="num">{b.engagement.toLocaleString()}</td>
               <td className="num" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>

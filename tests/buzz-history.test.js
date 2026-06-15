@@ -51,3 +51,26 @@ describe('attachDeltas', () => {
     expect(out.find((o) => o.symbol === 'TSLA').delta).toBe('new');
   });
 });
+
+describe('symbolSeries / attachTrends', () => {
+  let db2;
+  beforeEach(() => {
+    db2 = new Database(':memory:');
+    db2.exec(`CREATE TABLE buzz_history (
+      snapped_at INTEGER NOT NULL, symbol TEXT NOT NULL, rank INTEGER NOT NULL,
+      mentions INTEGER NOT NULL, engagement INTEGER NOT NULL
+    )`);
+  });
+  it('returns a symbol mentions series oldest-first and only attaches trends with 2+ points', async () => {
+    const { symbolSeries, attachTrends } = await import('../server/lib/buzz-history.js');
+    const now = 2_000_000_000_000;
+    const ins = db2.prepare('INSERT INTO buzz_history (snapped_at, symbol, rank, mentions, engagement) VALUES (?,?,?,?,?)');
+    ins.run(now - 2 * HOUR, 'GME', 1, 5, 100);
+    ins.run(now - HOUR, 'GME', 1, 8, 200);
+    ins.run(now - HOUR, 'TSLA', 2, 3, 50); // single point
+    expect(symbolSeries(db2, 'GME', { now }).map((p) => p.mentions)).toEqual([5, 8]);
+    const out = attachTrends(db2, [{ symbol: 'GME' }, { symbol: 'TSLA' }], { now });
+    expect(out[0].trend).toEqual([5, 8]);
+    expect(out[1].trend).toBeUndefined();
+  });
+});

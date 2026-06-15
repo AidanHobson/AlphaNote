@@ -9,7 +9,7 @@ import { fetchText, parseShredditPosts } from './social.js';
 import { tickerUniverse } from './fundamentals.js';
 import { getWatchlistData } from './finnhub.js';
 import { callAIWithFallback } from './ai-provider.js';
-import { snapshotBoard, attachDeltas } from './buzz-history.js';
+import { snapshotBoard, attachDeltas, attachTrends } from './buzz-history.js';
 import { getShortVolumeMap } from './shortvol.js';
 import { recordOutcome } from './source-health.js';
 import db from './db.js';
@@ -109,10 +109,12 @@ export async function getRedditBuzz({ force = false } = {}) {
     aggregateBuzz(dayLists.flat(), universe),
   );
 
-  // Time dimension: rank deltas vs ~a day ago, then snapshot this scan.
+  // Time dimension: rank deltas vs ~a day ago + a 7-day mentions sparkline,
+  // then snapshot this scan.
   if (items.length) {
     try {
       items = attachDeltas(db, items);
+      items = attachTrends(db, items);
       snapshotBoard(db, items);
     } catch { /* history is best-effort — the live board never depends on it */ }
   }
