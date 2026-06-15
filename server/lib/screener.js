@@ -10,9 +10,21 @@ import { getRedditBuzz } from './buzz.js';
 import { getInsiderTransactions } from './insider.js';
 import { getShortVolumeMap } from './shortvol.js';
 import { getWarmSnapshot } from './warmer.js';
+import { getWatchlistData } from './finnhub.js';
 import { scoreInsiderActivity } from './analytics.js';
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+// A curated universe of large, liquid, US-listed Chinese tech ADRs. These names
+// are structurally invisible to the other three sources — they're rarely on the
+// Reddit board, they never file Form 4 (foreign private issuers are exempt from
+// Section 16, so there's no insider-buy signal), and they're not in the US
+// movers basket. Covering them explicitly means the screener can still rank them
+// on the free signals that DO reach ADRs: FINRA short volume and the day's move.
+export const CHINA_TECH = [
+  'BABA', 'PDD', 'JD', 'BIDU', 'NTES', 'TCOM', 'BILI',
+  'LI', 'XPEV', 'NIO', 'TME', 'FUTU', 'BEKE',
+];
 
 // Each component is 0..1, deliberately interpretable. Insider buying is the
 // highest-quality signal here, so it carries the most weight.
@@ -86,10 +98,11 @@ const TTL = 30 * 60_000;
 export async function getResearchShortlist({ force = false } = {}) {
   if (!force && cache.data && Date.now() - cache.t < TTL) return cache.data;
 
-  const [board, insiderData, shortVol] = await Promise.all([
+  const [board, insiderData, shortVol, chinaQuotes] = await Promise.all([
     getRedditBuzz().catch(() => null),
     getInsiderTransactions().catch(() => null),
     getShortVolumeMap().catch(() => ({ map: null })),
+    getWatchlistData(CHINA_TECH).catch(() => []),
   ]);
 
   // Score every symbol's open-market insider activity, market-wide.
@@ -123,26 +136,45 @@ export async function getResearchShortlist({ force = false } = {}) {
     .slice(0, 8);
   const moverBySym = new Map(movers.map((m) => [m.symbol, m]));
 
-  const symbols = [...new Set([...buzzItems.map((b) => b.symbol), ...insiderBuy, ...movers.map((m) => m.symbol)])];
+  // Fourth source: the curated Chinese-tech ADR universe, quoted in bulk
+  // (fail-fast). Only names that actually quote are kept, so it degrades to
+  // however many the free tier returns.
+  const chinaItems = (Array.isArray(chinaQuotes) ? chinaQuotes : []).filter((q) => q && q.price > 0);
+  const chinaBySym = new Map(chinaItems.map((q) => [q.symbol, q]));
+
+  const symbols = [...new Set([
+    ...buzzItems.map((b) => b.symbol),
+    ...insiderBuy,
+    ...movers.map((m) => m.symbol),
+    ...chinaItems.map((q) => q.symbol),
+  ])];
   if (!symbols.length) {
-    return { available: false, reason: 'No live candidates from the trending board, insider filings, or movers right now.' };
+    return { available: false, reason: 'No live candidates from the trending board, insider filings, movers, or Chinese ADRs right now.' };
   }
 
   const svMap = shortVol?.map;
   const items = symbols.map((sym) => {
     const b = buzzBySym.get(sym);
     const m = moverBySym.get(sym);
+    const cn = chinaBySym.get(sym);
     const sv = svMap?.get(sym);
+    // Source precedence: Reddit attention (richest signal) wins, then insider
+    // buying, then a US mover, then the curated China universe.
+    const source = b ? 'trending'
+      : insiderBuy.includes(sym) && !m && !cn ? 'insider buying'
+      : m ? 'big mover'
+      : cn ? 'china tech'
+      : 'trending';
     return {
       symbol: sym,
-      name: b?.name || m?.name || null,
+      name: b?.name || m?.name || cn?.name || null,
       mentions: b?.mentions || 0,
       rising: b?.rising || false,
       shortVol: sv ? { ratio: sv.ratio, date: sv.date } : (b?.shortVol || null),
-      // Prefer the buzz quote; otherwise the mover's quote (off-board insider
-      // names skip quote enrichment to avoid extra Finnhub quota).
-      quote: b?.quote || (m ? { price: m.price, changePercent: m.changePercent } : null),
-      source: b ? 'trending' : insiderBuy.includes(sym) && !m ? 'insider buying' : 'big mover',
+      // Prefer the buzz quote; otherwise the mover's, otherwise the ADR's
+      // (off-board insider names skip quote enrichment to avoid extra quota).
+      quote: b?.quote || (m ? { price: m.price, changePercent: m.changePercent } : cn ? { price: cn.price, changePercent: cn.changePercent } : null),
+      source,
     };
   });
 

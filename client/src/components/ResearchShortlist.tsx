@@ -14,7 +14,7 @@ export default function ResearchShortlist({ onResearch }: { onResearch: (symbol:
   return (
     <Card
       title="Research shortlist"
-      sub="candidates from Reddit-trending names, market-wide insider buying, and the day's biggest movers — ranked by composite signal strength — what to research, not what to buy"
+      sub="candidates from Reddit-trending names, market-wide insider buying, the day's biggest movers, and large Chinese tech ADRs — ranked by composite signal strength — what to research, not what to buy"
       style={{ marginTop: 16 }}
     >
       {!data ? <SkeletonLines lines={5} /> : (
@@ -28,7 +28,7 @@ export default function ResearchShortlist({ onResearch }: { onResearch: (symbol:
                 <td style={{ fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
                   {c.symbol}{c.name && c.name !== c.symbol && <div style={{ color: 'var(--color-text-muted)', fontSize: 11.5, fontWeight: 400 }}>{c.name}</div>}
                 </td>
-                <td><span className={`badge ${c.source === 'insider buying' ? 'up' : 'flat'}`}>{c.source === 'insider buying' ? '★ insider' : c.source === 'big mover' ? '⇅ mover' : '🔥 trending'}</span></td>
+                <td><span className={`badge ${c.source === 'insider buying' ? 'up' : 'flat'}`}>{c.source === 'insider buying' ? '★ insider' : c.source === 'big mover' ? '⇅ mover' : c.source === 'china tech' ? '🇨🇳 china' : '🔥 trending'}</span></td>
                 <td className="num" style={{ fontWeight: 700 }} title={`attention ${c.components.attention} · squeeze ${c.components.squeeze} · momentum ${c.components.momentum} · insider ${c.components.insider}`}>
                   {c.score}
                 </td>

@@ -40,6 +40,20 @@ describe('scoreCandidate', () => {
     expect(c.components.attention).toBe(0);
     expect(c.score).toBeGreaterThan(30); // insider weight 0.35 × 1.0 = 35
   });
+
+  it('a curated Chinese ADR ranks on the free signals (squeeze + momentum) it CAN have, carrying its source', () => {
+    const c = scoreCandidate(
+      { symbol: 'BABA', mentions: 0, source: 'china tech', shortVol: { ratio: 65 }, rising: false, quote: { changePercent: 5 } },
+      null, // foreign private issuers file no Form 4 — there is no insider signal
+      20,
+    );
+    expect(c.source).toBe('china tech');
+    expect(c.components.attention).toBe(0); // off the Reddit board
+    expect(c.components.insider).toBe(0); // no Form 4
+    expect(c.components.squeeze).toBeGreaterThan(0);
+    expect(c.tags).toContain('65% short');
+    expect(c.score).toBeGreaterThan(0);
+  });
 });
 
 describe('buildScreener', () => {
