@@ -3,7 +3,7 @@
 // ratings, EDGAR TTM fundamentals + FY history, 1Y price history, insider
 // filings) and asks the analyst for a structured, evidence-led note.
 
-import { getQuote, getCompanyProfile, getNews, getNextEarnings, getBasicFinancials } from './finnhub.js';
+import { getQuote, getCompanyProfile, getNews, getNextEarnings, getBasicFinancials, getEarningsSurprises } from './finnhub.js';
 import { getAnalystRatings } from './analyst.js';
 import { getFundamentals } from './fundamentals.js';
 import { getPriceHistory, isEodhdConfigured } from './eodhd.js';
@@ -33,10 +33,10 @@ Two or three sentences: what the company is, where the stock stands today, and t
 The 2-3 drivers material enough to move the investment case. For each: one bullet naming the driver, why it is material, and what the data suggests the market currently assumes about it. Skip anything that is merely interesting.
 
 **Fundamentals & earnings quality**
-Bullets on the trajectory (use the fiscal-year history), current TTM profitability, and cash conversion. If operating cash flow diverges materially from net income (below roughly 0.8x), flag it as an earnings-quality question; if it is healthy, say so in one clause.
+Bullets on the trajectory (use the fiscal-year history), current TTM profitability, and cash conversion. If operating cash flow diverges materially from net income (below roughly 0.8x), flag it as an earnings-quality question; if it is healthy, say so in one clause. Bring in the return profile (ROE/ROIC) and whether margins are above or below their 5-year average (expanding vs compressing). When an earnings-surprise history is provided, state the beat/miss track record and whether the bar looks high or low going into the next print.
 
 **Valuation context**
-Use the multiples when provided: the AlphaNote-derived block (P/E, P/S, P/B, EV/EBITDA, FCF yield — always cite as "derived") AND the market block (trailing P/E, forward P/E, PEG — cite as "market"). Anchor the read on three things: the trailing P/E (what the market pays today), the forward P/E versus trailing (what it expects earnings to do), and the PEG (whether the price is justified by the growth — flag a PEG well above 1 as paying up, and don't trust a low PEG if the growth looks one-off). Set all of it against the 1-year absolute and SPY-relative price move and the fundamental trajectory, and say whether the market appears to be paying for growth, quality, or recovery. If both blocks are missing, say "insufficient data for a valuation view" and move on.
+Use the multiples when provided: the AlphaNote-derived block (P/E, P/S, P/B, EV/EBITDA, FCF yield — always cite as "derived") AND the market block (trailing P/E, forward P/E, PEG — cite as "market"). Anchor the read on three things: the trailing P/E (what the market pays today), the forward P/E versus trailing (what it expects earnings to do), and the PEG (whether the price is justified by the growth — flag a PEG well above 1 as paying up, and don't trust a low PEG if the growth looks one-off). Set all of it against the 1-year absolute and SPY-relative price move and the fundamental trajectory, and say whether the market appears to be paying for growth, quality, or recovery. Factor in where the price sits in its 52-week range, its relative strength versus the S&P 500, and the dividend yield/payout if any. If both blocks are missing, say "insufficient data for a valuation view" and move on.
 
 **Peer comparables**
 When peer multiples are provided, render a short markdown table — | Ticker | P/E | P/S | EV/EBITDA | — with the subject and its peers, then one line on whether the subject trades at a premium or discount to the set and what that implies. All figures are derived; if no peer data is provided, omit this section.
@@ -52,7 +52,7 @@ Bullets: the key risks visible in the data, and concrete catalysts — when a ne
 
 Bottom line: one sentence with your analytical view and a conviction score out of 5 (e.g. "cautiously constructive, conviction 3/5"), then the single question a researcher should answer next. This is analysis, not investment advice.
 
-Keep the whole note under 550 words.`;
+Keep the whole note under 600 words — be selective: more inputs are provided than will fit, so lead with what is material and leave the rest.`;
 
 
 // Multiples computed server-side from market cap + EDGAR TTM figures, so the
@@ -101,7 +101,40 @@ export function marketMultiples(metric) {
   return out;
 }
 
-export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps, filings }) {
+// A curated, high-signal subset of Finnhub's basic-financials blob (already
+// fetched for the multiples). These fill real gaps the SEC-derived block does
+// not cover: the return profile (ROE/ROA/ROIC), margin TREND (TTM vs 5Y avg),
+// balance-sheet health, capital return, and market profile (beta, 52-week range,
+// relative strength). Zero extra API calls. Returns null when nothing is usable.
+export function companyMetrics(metric) {
+  if (!metric) return null;
+  const n = (v) => (Number.isFinite(v) ? Number(Number(v).toFixed(2)) : null);
+  const out = {
+    roeTTM: n(metric.roeTTM), roe5Y: n(metric.roe5Y), roaTTM: n(metric.roaTTM), roiTTM: n(metric.roiTTM),
+    grossMarginTTM: n(metric.grossMarginTTM), grossMargin5Y: n(metric.grossMargin5Y),
+    operatingMarginTTM: n(metric.operatingMarginTTM), operatingMargin5Y: n(metric.operatingMargin5Y),
+    netMarginTTM: n(metric.netProfitMarginTTM), netMargin5Y: n(metric.netProfitMargin5Y),
+    currentRatio: n(metric.currentRatioQuarterly ?? metric.currentRatioAnnual),
+    debtToEquity: n(metric['totalDebt/totalEquityQuarterly'] ?? metric['totalDebt/totalEquityAnnual']),
+    interestCoverage: n(metric.netInterestCoverageTTM ?? metric.netInterestCoverageAnnual),
+    dividendYield: n(metric.currentDividendYieldTTM ?? metric.dividendYieldIndicatedAnnual),
+    payoutRatio: n(metric.payoutRatioTTM ?? metric.payoutRatioAnnual),
+    dividendGrowth5Y: n(metric.dividendGrowthRate5Y),
+    beta: n(metric.beta),
+    high52w: n(metric['52WeekHigh']), low52w: n(metric['52WeekLow']),
+    priceReturn52w: n(metric['52WeekPriceReturnDaily']),
+    relToSpy52w: n(metric['priceRelativeToS&P50052Week']),
+  };
+  return Object.values(out).some((v) => v != null) ? out : null;
+}
+
+// Where the last price sits within the 52-week range, as a 0-100% position.
+export function rangePosition(price, low, high) {
+  if (!Number.isFinite(price) || !Number.isFinite(low) || !Number.isFinite(high) || high <= low) return null;
+  return Math.round(Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100)));
+}
+
+export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, keyMetrics, surprises, nextEarnings, smartMoney, spyStats, peerComps, filings }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -193,6 +226,49 @@ export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fun
     if (g.length) lines.push(`- Growth context behind the PEG: ${g.join(', ')}`);
   }
 
+  if (keyMetrics) {
+    const k = keyMetrics;
+    lines.push('');
+    lines.push('Key metrics (Finnhub basic financials; TTM unless noted — use these for the return profile, the margin TREND, balance-sheet health, capital return, and relative strength):');
+    const ret = [];
+    if (k.roeTTM != null) ret.push(`ROE ${k.roeTTM}%${k.roe5Y != null ? ` (5Y avg ${k.roe5Y}%)` : ''}`);
+    if (k.roaTTM != null) ret.push(`ROA ${k.roaTTM}%`);
+    if (k.roiTTM != null) ret.push(`ROIC ${k.roiTTM}%`);
+    if (ret.length) lines.push(`- Returns: ${ret.join(', ')}`);
+    const mar = [];
+    if (k.grossMarginTTM != null) mar.push(`gross ${k.grossMarginTTM}%${k.grossMargin5Y != null ? ` vs 5Y ${k.grossMargin5Y}%` : ''}`);
+    if (k.operatingMarginTTM != null) mar.push(`operating ${k.operatingMarginTTM}%${k.operatingMargin5Y != null ? ` vs 5Y ${k.operatingMargin5Y}%` : ''}`);
+    if (k.netMarginTTM != null) mar.push(`net ${k.netMarginTTM}%${k.netMargin5Y != null ? ` vs 5Y ${k.netMargin5Y}%` : ''}`);
+    if (mar.length) lines.push(`- Margins (TTM vs 5-year average → expanding or compressing): ${mar.join('; ')}`);
+    const bs = [];
+    if (k.currentRatio != null) bs.push(`current ratio ${k.currentRatio}`);
+    if (k.debtToEquity != null) bs.push(`debt/equity ${k.debtToEquity}`);
+    if (k.interestCoverage != null) bs.push(`interest coverage ${k.interestCoverage}x`);
+    if (bs.length) lines.push(`- Balance sheet: ${bs.join(', ')}`);
+    if (k.dividendYield != null && k.dividendYield > 0) {
+      lines.push(`- Capital return: dividend yield ${k.dividendYield}%${k.payoutRatio != null ? `, payout ${k.payoutRatio}%` : ''}${k.dividendGrowth5Y != null ? `, 5Y dividend growth ${k.dividendGrowth5Y}%` : ''}`);
+    } else if (k.dividendYield === 0) {
+      lines.push('- Capital return: pays no dividend.');
+    }
+    const mkt = [];
+    if (k.beta != null) mkt.push(`beta ${k.beta}`);
+    const rp = rangePosition(quote?.c, k.low52w, k.high52w);
+    if (k.low52w != null && k.high52w != null) mkt.push(`52-week range ${k.low52w}–${k.high52w}${rp != null ? ` (now at ${rp}% of range)` : ''}`);
+    if (k.priceReturn52w != null) mkt.push(`52-week price return ${k.priceReturn52w}%`);
+    if (k.relToSpy52w != null) mkt.push(`relative to S&P 500 over 52 weeks: ${k.relToSpy52w > 0 ? '+' : ''}${k.relToSpy52w}pp`);
+    if (mkt.length) lines.push(`- Market profile: ${mkt.join(', ')}`);
+  }
+
+  if (surprises?.length) {
+    lines.push('');
+    lines.push('Earnings surprise history (reported EPS vs consensus estimate, most recent first):');
+    for (const s of surprises) {
+      const tag = s.surprisePercent == null ? '' : ` → ${s.surprisePercent >= 0 ? 'beat' : 'miss'} ${s.surprisePercent >= 0 ? '+' : ''}${s.surprisePercent}%`;
+      const label = s.quarter && s.year ? `Q${s.quarter} ${s.year}` : s.period;
+      lines.push(`- ${label} (${s.period}): actual ${s.actual} vs est ${s.estimate}${tag}`);
+    }
+  }
+
   if (nextEarnings?.date) {
     const hour = nextEarnings.hour === 'bmo' ? ' (before market open)' : nextEarnings.hour === 'amc' ? ' (after market close)' : '';
     const eps = nextEarnings.epsEstimate != null ? `; street EPS estimate ${nextEarnings.epsEstimate}` : '';
@@ -279,7 +355,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const hit = noteCache.get(sym);
   if (!force && hit && Date.now() - hit.t < NOTE_TTL) return { ...hit.note, cached: true };
 
-  const [quote, profile, news, ratings, fundamentals, history, insiderData, nextEarnings, smartMoney, spyHistory, metric] = await Promise.all([
+  const [quote, profile, news, ratings, fundamentals, history, insiderData, nextEarnings, smartMoney, spyHistory, metric, surprises] = await Promise.all([
     getQuote(sym),
     getCompanyProfile(sym),
     getNews([sym]).catch(() => []),
@@ -291,6 +367,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
     findSymbolAcrossManagers(sym).catch(() => null),
     isEodhdConfigured() ? getPriceHistory('SPY').catch(() => null) : Promise.resolve(null),
     getBasicFinancials(sym).catch(() => null),
+    getEarningsSurprises(sym).catch(() => []),
   ]);
 
   if (!quote || quote.c == null || quote.c === 0) {
@@ -303,6 +380,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const insiders = allTxns.filter((t) => String(t.symbol || '').toUpperCase() === sym);
   const valuation = computeValuation(profile, fundamentals);
   const marketMult = marketMultiples(metric);
+  const keyMetrics = companyMetrics(metric);
   const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
   // Relative-valuation context + SEC filing narrative (both best-effort; peer
   // multiples are cached/free, the filing read needs the CIK from fundamentals).
@@ -311,7 +389,7 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
     fundamentals?.cik ? getFilingResearch(fundamentals.cik).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps, filings });
+  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, keyMetrics, surprises, nextEarnings, smartMoney, spyStats, peerComps, filings });
   // A full note runs ~550 words; give the model ample output budget so it never truncates mid-section.
   const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600, onDelta });
 
@@ -334,6 +412,13 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
       hasValuation: Boolean(valuation),
       valuationMultiples: marketMult
         ? { pe: marketMult.pe, forwardPE: marketMult.forwardPE, peg: marketMult.peg, forwardPeg: marketMult.forwardPeg }
+        : null,
+      keyStats: keyMetrics
+        ? {
+            roe: keyMetrics.roeTTM, dividendYield: keyMetrics.dividendYield, beta: keyMetrics.beta,
+            low52w: keyMetrics.low52w, high52w: keyMetrics.high52w,
+            range52wPct: rangePosition(quote.c, keyMetrics.low52w, keyMetrics.high52w),
+          }
         : null,
       managers13F: smartMoney?.length ?? 0,
       nextEarnings: nextEarnings?.date || null,

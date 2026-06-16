@@ -102,6 +102,28 @@ export async function getBasicFinancials(symbol, { patienceMs } = {}) {
   }
 }
 
+// Reported-vs-estimate EPS for the last several quarters (free tier) — the
+// beat/miss track record, informative for earnings quality and what's priced in.
+// Returned most-recent-first, as Finnhub orders it. Cached 12h.
+export async function getEarningsSurprises(symbol, { limit = 4, patienceMs } = {}) {
+  try {
+    const url = `${BASE_URL}/stock/earnings?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;
+    const data = await cached(`esurprise:${symbol}`, 43200, () => fetchJSON(url, { patienceMs }));
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((e) => e && e.actual != null && e.estimate != null)
+      .slice(0, limit)
+      .map((e) => ({
+        period: e.period, quarter: e.quarter ?? null, year: e.year ?? null,
+        actual: e.actual, estimate: e.estimate,
+        surprisePercent: Number.isFinite(e.surprisePercent) ? Number(e.surprisePercent.toFixed(1)) : null,
+      }));
+  } catch (e) {
+    console.error('Error fetching earnings surprises for', symbol, e.message);
+    return [];
+  }
+}
+
 export async function getCompanyProfile(symbol, { patienceMs } = {}) {
   try {
     const url = `${BASE_URL}/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${getToken()}`;

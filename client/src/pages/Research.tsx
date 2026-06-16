@@ -231,14 +231,23 @@ export default function Research() {
             <button className="icon-btn" style={{ width: 30, height: 30, marginLeft: 8 }} title="Regenerate (bypasses the 1h cache)"
               onClick={() => run(note.symbol, true)} disabled={loading}>↻</button>
           </div>
-          {note.data.valuationMultiples && (note.data.valuationMultiples.pe != null || note.data.valuationMultiples.forwardPE != null || note.data.valuationMultiples.peg != null) && (
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'baseline', padding: '8px 16px', borderTop: '1px solid var(--color-border)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              {note.data.valuationMultiples.pe != null && <span>P/E <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.pe}x</b></span>}
-              {note.data.valuationMultiples.forwardPE != null && <span>Forward P/E <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.forwardPE}x</b></span>}
-              {note.data.valuationMultiples.peg != null && <span title="Trailing P/E ÷ earnings-growth rate">PEG <b style={{ color: 'var(--color-text)' }}>{note.data.valuationMultiples.peg}</b></span>}
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 11.5 }}>market multiples · Finnhub · forward = consensus</span>
-            </div>
-          )}
+          {(() => {
+            const vm = note.data.valuationMultiples; const ks = note.data.keyStats;
+            const hasAny = (vm && (vm.pe != null || vm.forwardPE != null || vm.peg != null)) || (ks && (ks.roe != null || (ks.dividendYield != null && ks.dividendYield > 0) || ks.range52wPct != null));
+            if (!hasAny) return null;
+            const stat = (label: string, value: string | number, title?: string) => <span title={title}>{label} <b style={{ color: 'var(--color-text)' }}>{value}</b></span>;
+            return (
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'baseline', padding: '8px 16px', borderTop: '1px solid var(--color-border)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                {vm?.pe != null && stat('P/E', `${vm.pe}x`)}
+                {vm?.forwardPE != null && stat('Forward P/E', `${vm.forwardPE}x`)}
+                {vm?.peg != null && stat('PEG', vm.peg, 'Trailing P/E ÷ earnings-growth rate')}
+                {ks?.roe != null && stat('ROE', `${ks.roe}%`)}
+                {ks?.dividendYield != null && ks.dividendYield > 0 && stat('Div yield', `${ks.dividendYield}%`)}
+                {ks?.range52wPct != null && stat('52w range', `${ks.range52wPct}%`, ks.low52w != null && ks.high52w != null ? `${ks.low52w}–${ks.high52w}; ${ks.range52wPct}% of the way up` : 'position within the 52-week range')}
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 11.5 }}>key stats · Finnhub · forward = consensus</span>
+              </div>
+            );
+          })()}
           <div className="ai-body" style={{ opacity: loading ? 0.5 : 1 }}>
             <AIText text={note.text} onTicker={(s) => run(s)} />
           </div>

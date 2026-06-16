@@ -197,6 +197,10 @@ export interface ResearchNote {
     hasValuation?: boolean; managers13F?: number; nextEarnings?: string | null;
     peerCount?: number; insiderSignal?: string | null;
     valuationMultiples?: { pe: number | null; forwardPE: number | null; peg: number | null; forwardPeg: number | null } | null;
+    keyStats?: {
+      roe: number | null; dividendYield: number | null; beta: number | null;
+      low52w: number | null; high52w: number | null; range52wPct: number | null;
+    } | null;
     filings?: {
       periodic: { form: string; date: string; mdna: boolean; riskFactors: boolean } | null;
       events: { form: string; date: string; items: string[] }[];

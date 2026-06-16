@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SYSTEM_PROMPT, buildResearchPrompt, computeValuation, marketMultiples } from '../server/lib/research.js';
+import { SYSTEM_PROMPT, buildResearchPrompt, computeValuation, marketMultiples, companyMetrics, rangePosition } from '../server/lib/research.js';
 
 const quote = { c: 100, d: 2, dp: 2.04, l: 97, h: 101, o: 98, pc: 98 };
 const profile = { name: 'Acme Corp', finnhubIndustry: 'Software', exchange: 'NASDAQ', country: 'US', currency: 'USD', marketCapitalization: 5000 };
@@ -107,6 +107,40 @@ describe('buildResearchPrompt', () => {
     expect(p).toContain('Berkshire Hathaway: $2.00B position (2.1% of portfolio), trimmed -5% shares QoQ (as of 2026-03-31)');
   });
 
+  it('includes the key-metrics block: returns, margin trend, balance sheet, capital return, market profile', () => {
+    const keyMetrics = companyMetrics({
+      roeTTM: 146.69, roe5Y: 163.92, roaTTM: 34.02, roiTTM: 69.07,
+      grossMarginTTM: 47.86, grossMargin5Y: 44.47, operatingMarginTTM: 32.64, operatingMargin5Y: 30.67,
+      netProfitMarginTTM: 27.15, netProfitMargin5Y: 25.48,
+      currentRatioQuarterly: 1.07, 'totalDebt/totalEquityQuarterly': 0.8, netInterestCoverageTTM: 622.51,
+      currentDividendYieldTTM: 0.35, payoutRatioTTM: 12.69, dividendGrowthRate5Y: 4.95,
+      beta: 1.1, '52WeekHigh': 317.4, '52WeekLow': 195.07, '52WeekPriceReturnDaily': 50.89, 'priceRelativeToS&P50052Week': 24.45,
+    });
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], keyMetrics });
+    expect(p).toContain('Returns: ROE 146.69% (5Y avg 163.92%), ROA 34.02%, ROIC 69.07%');
+    expect(p).toContain('gross 47.86% vs 5Y 44.47%');
+    expect(p).toContain('Balance sheet: current ratio 1.07, debt/equity 0.8, interest coverage 622.51x');
+    expect(p).toContain('dividend yield 0.35%, payout 12.69%, 5Y dividend growth 4.95%');
+    expect(p).toContain('relative to S&P 500 over 52 weeks: +24.45pp');
+    expect(p).toContain('now at 0% of range'); // quote.c=100 is below the 195.07 low → clamps to 0%
+  });
+
+  it('includes the earnings-surprise history with beat/miss tags', () => {
+    const surprises = [
+      { period: '2026-03-31', quarter: 2, year: 2026, actual: 2.01, estimate: 1.99, surprisePercent: 1.1 },
+      { period: '2025-12-31', quarter: 1, year: 2026, actual: 2.84, estimate: 2.9, surprisePercent: -2.1 },
+    ];
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], surprises });
+    expect(p).toContain('Earnings surprise history');
+    expect(p).toContain('Q2 2026 (2026-03-31): actual 2.01 vs est 1.99 → beat +1.1%');
+    expect(p).toContain('Q1 2026 (2025-12-31): actual 2.84 vs est 2.9 → miss -2.1%');
+  });
+
+  it('notes when a company pays no dividend', () => {
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], keyMetrics: companyMetrics({ roeTTM: 20, currentDividendYieldTTM: 0 }) });
+    expect(p).toContain('pays no dividend');
+  });
+
   it('includes the SEC filings block with MD&A, risk factors, and dated 8-K items', () => {
     const filings = {
       available: true,
@@ -170,6 +204,23 @@ describe('computeValuation', () => {
     expect(computeValuation({ marketCapitalization: 50_000 }, null)).toBeNull();
     const lossCo = { available: true, lineItems: [{ key: 'netIncome', current: { value: -1e9 } }] };
     expect(computeValuation({ marketCapitalization: 50_000 }, lossCo).pe).toBeNull();
+  });
+});
+
+describe('companyMetrics & rangePosition', () => {
+  it('extracts a curated subset incl. slash/ampersand keys, and rounds', () => {
+    const k = companyMetrics({ roeTTM: 146.69, 'totalDebt/totalEquityQuarterly': 0.7955, 'priceRelativeToS&P50052Week': 24.4511, beta: 1.0955 });
+    expect(k).toMatchObject({ roeTTM: 146.69, debtToEquity: 0.8, relToSpy52w: 24.45, beta: 1.1 });
+  });
+  it('returns null when the blob carries none of the wanted fields', () => {
+    expect(companyMetrics(null)).toBeNull();
+    expect(companyMetrics({ peTTM: 30 })).toBeNull();
+  });
+  it('rangePosition maps price within the 52-week band to 0-100%, clamped', () => {
+    expect(rangePosition(250, 200, 300)).toBe(50);
+    expect(rangePosition(190, 200, 300)).toBe(0); // below the low → clamped
+    expect(rangePosition(100, 200, 200)).toBeNull(); // degenerate band
+    expect(rangePosition(undefined, 200, 300)).toBeNull();
   });
 });
 
