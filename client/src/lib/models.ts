@@ -197,5 +197,9 @@ export interface ResearchNote {
     hasValuation?: boolean; managers13F?: number; nextEarnings?: string | null;
     peerCount?: number; insiderSignal?: string | null;
     valuationMultiples?: { pe: number | null; forwardPE: number | null; peg: number | null; forwardPeg: number | null } | null;
+    filings?: {
+      periodic: { form: string; date: string; mdna: boolean; riskFactors: boolean } | null;
+      events: { form: string; date: string; items: string[] }[];
+    } | null;
   };
 }

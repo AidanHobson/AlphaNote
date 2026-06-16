@@ -247,6 +247,10 @@ export default function Research() {
             {' · '}sources: live quote{note.data.hasFundamentals ? ', SEC EDGAR fundamentals + quarterly trend' : ''}
             {note.data.hasValuation ? ', derived multiples' : ''}
             {note.data.valuationMultiples ? ', market P/E + forward P/E + PEG' : ''}
+            {note.data.filings ? `, SEC filings (${[
+              note.data.filings.periodic && `${note.data.filings.periodic.form}${[note.data.filings.periodic.mdna && 'MD&A', note.data.filings.periodic.riskFactors && 'risk factors'].filter(Boolean).length ? ` ${[note.data.filings.periodic.mdna && 'MD&A', note.data.filings.periodic.riskFactors && 'risk factors'].filter(Boolean).join(' + ')}` : ''}`,
+              note.data.filings.events.length ? `${note.data.filings.events.length} recent 8-K${note.data.filings.events.length > 1 ? 's' : ''}` : null,
+            ].filter(Boolean).join(', ')})` : ''}
             {note.data.hasHistory ? ', 1Y price history vs SPY' : ''}, news, analyst ratings
             {(note.data.peerCount ?? 0) > 0 ? `, ${note.data.peerCount} peer comp${(note.data.peerCount ?? 0) > 1 ? 's' : ''}` : ''}
             {(note.data.managers13F ?? 0) > 0 ? `, ${note.data.managers13F} 13F manager${(note.data.managers13F ?? 0) > 1 ? 's' : ''}` : ''}

@@ -107,6 +107,29 @@ describe('buildResearchPrompt', () => {
     expect(p).toContain('Berkshire Hathaway: $2.00B position (2.1% of portfolio), trimmed -5% shares QoQ (as of 2026-03-31)');
   });
 
+  it('includes the SEC filings block with MD&A, risk factors, and dated 8-K items', () => {
+    const filings = {
+      available: true,
+      periodic: { form: '10-Q', filingDate: '2026-05-01', mdna: 'Revenue grew on strong demand and margins expanded.', riskFactors: 'Supply concentration and regulatory change are key risks.' },
+      events: [
+        { form: '8-K', filingDate: '2026-04-30', items: ['Item 2.02 — results of operations (earnings release)'], excerpt: 'The company issued a press release reporting results.' },
+        { form: '8-K', filingDate: '2026-04-20', items: ['Item 5.02 — departure or appointment of directors/officers'], excerpt: null },
+      ],
+    };
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], filings });
+    expect(p).toContain('From the SEC filings');
+    expect(p).toContain('Latest periodic report: 10-Q filed 2026-05-01');
+    expect(p).toContain('MD&A excerpt: "Revenue grew on strong demand');
+    expect(p).toContain('Risk Factors excerpt: "Supply concentration');
+    expect(p).toContain('8-K filed 2026-04-30: Item 2.02 — results of operations (earnings release)');
+    expect(p).toContain('8-K filed 2026-04-20: Item 5.02');
+  });
+
+  it('omits the SEC filings block when filings are unavailable', () => {
+    const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], filings: null });
+    expect(p).not.toContain('From the SEC filings');
+  });
+
   it('says when no tracked manager holds the name (empty array ≠ unknown)', () => {
     const p = buildResearchPrompt({ symbol: 'ACME', quote, profile, news: [], ratings: null, fundamentals: null, history: null, insiders: [], smartMoney: [] });
     expect(p).toContain('does not appear among the top holdings');

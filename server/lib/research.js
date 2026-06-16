@@ -11,6 +11,7 @@ import { getInsiderTransactions } from './insider.js';
 import { findSymbolAcrossManagers } from './smartmoney.js';
 import { scoreInsiderActivity, insiderScoreLine, peerCompLines } from './analytics.js';
 import { getPeerComps } from './peers.js';
+import { getFilingResearch } from './filings.js';
 import { callAIWithFallback } from './ai-provider.js';
 import { formatMarketCapValue, fmtUsd, boundedSet } from './utils.js';
 
@@ -20,6 +21,7 @@ Standards:
 - Senior buy-side voice: precise, quantified, evidence-led, no padding. Plain language over jargon; briefly explain any term a generalist would not know.
 - Separate facts from interpretation. Every claim must trace to a number or headline in the input; frame implications as "suggests" or "implies".
 - NEVER invent data. No price targets, estimates, or figures not present in or directly derivable from the input. If you derive a figure (e.g. an implied P/E from market cap and EPS), label it "derived". Where data is missing, write "insufficient data" rather than guessing.
+- When SEC filing excerpts are provided, treat them as primary source: prefer management's own words over headlines for the business narrative, quote sparingly and verbatim, cite the form and filing date (e.g. "(10-Q, 2026-05-01)"), and never claim or imply you have read the full filing — they are excerpts.
 - The note expresses an analytical view, NOT advice: no position sizing, no personalised recommendations.
 
 Write the note in exactly this structure (plain text; section titles as bold lines, bullets starting with "- "):
@@ -46,7 +48,7 @@ What analyst consensus, news tone, the scored insider signal (weight a multi-ins
 Three bullets — Bull, Base, Bear. Each one sentence: what would have to be true, anchored to the drivers above. No invented price targets.
 
 **Risks & catalysts**
-Bullets: the key risks visible in the data, and concrete catalysts — when a next earnings date is provided, anchor catalyst timing to it.
+Bullets: the key risks visible in the data, and concrete catalysts — when a next earnings date is provided, anchor catalyst timing to it. When Risk Factors or 8-K items are provided, draw the named risks and catalysts from them and cite the form + date (e.g. a 5.02 officer departure or a 2.02 earnings release is a dated, concrete event).
 
 Bottom line: one sentence with your analytical view and a conviction score out of 5 (e.g. "cautiously constructive, conviction 3/5"), then the single question a researcher should answer next. This is analysis, not investment advice.
 
@@ -99,7 +101,7 @@ export function marketMultiples(metric) {
   return out;
 }
 
-export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps }) {
+export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps, filings }) {
   const lines = [];
   lines.push(`Stock symbol: ${symbol}`);
   if (profile?.name) lines.push(`Company: ${profile.name}`);
@@ -207,6 +209,21 @@ export function buildResearchPrompt({ symbol, quote, profile, news, ratings, fun
     lines.push('Recent headlines: none available.');
   }
 
+  if (filings?.available || filings?.periodic || filings?.events?.length) {
+    lines.push('');
+    lines.push('From the SEC filings (primary source via EDGAR — quote management verbatim where it sharpens a point and cite the form + date; each is an EXCERPT, not the full filing, so do not infer beyond it):');
+    if (filings.periodic) {
+      const p = filings.periodic;
+      lines.push(`- Latest periodic report: ${p.form} filed ${p.filingDate}.`);
+      if (p.mdna) lines.push(`  MD&A excerpt: "${p.mdna.slice(0, 1600)}"`);
+      if (p.riskFactors) lines.push(`  Risk Factors excerpt: "${p.riskFactors.slice(0, 1100)}"`);
+    }
+    for (const ev of filings.events || []) {
+      lines.push(`- ${ev.form} filed ${ev.filingDate}: ${ev.items.join('; ') || 'material event'}.`);
+      if (ev.excerpt) lines.push(`  Excerpt: "${ev.excerpt.slice(0, 450)}"`);
+    }
+  }
+
   if (ratings?.hasCoverage) {
     const l = ratings.latest;
     lines.push('');
@@ -287,10 +304,14 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
   const valuation = computeValuation(profile, fundamentals);
   const marketMult = marketMultiples(metric);
   const spyStats = sym !== 'SPY' && spyHistory?.available ? spyHistory.stats : null;
-  // Relative-valuation context (best-effort; cached peer multiples are free).
-  const peerComps = await getPeerComps(sym, profile).catch(() => []);
+  // Relative-valuation context + SEC filing narrative (both best-effort; peer
+  // multiples are cached/free, the filing read needs the CIK from fundamentals).
+  const [peerComps, filings] = await Promise.all([
+    getPeerComps(sym, profile).catch(() => []),
+    fundamentals?.cik ? getFilingResearch(fundamentals.cik).catch(() => null) : Promise.resolve(null),
+  ]);
 
-  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps });
+  const prompt = buildResearchPrompt({ symbol: sym, quote, profile, news, ratings, fundamentals, history, insiders, valuation, marketMult, nextEarnings, smartMoney, spyStats, peerComps, filings });
   // A full note runs ~550 words; give the model ample output budget so it never truncates mid-section.
   const { provider, text, fellBack } = await callAIWithFallback(prompt, SYSTEM_PROMPT, { maxTokens: 1600, onDelta });
 
@@ -318,6 +339,14 @@ export async function generateResearchNote(symbol, { force = false, onDelta } = 
       nextEarnings: nextEarnings?.date || null,
       peerCount: Math.max(0, (peerComps?.length ?? 0) - 1),
       insiderSignal: insiders.length ? scoreInsiderActivity(insiders).label : null,
+      filings: filings?.available
+        ? {
+            periodic: filings.periodic
+              ? { form: filings.periodic.form, date: filings.periodic.filingDate, mdna: Boolean(filings.periodic.mdna), riskFactors: Boolean(filings.periodic.riskFactors) }
+              : null,
+            events: (filings.events || []).map((e) => ({ form: e.form, date: e.filingDate, items: e.items })),
+          }
+        : null,
     },
   };
   boundedSet(noteCache, sym, { t: Date.now(), note }, 100);
