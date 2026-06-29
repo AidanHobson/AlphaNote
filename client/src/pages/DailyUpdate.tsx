@@ -94,7 +94,6 @@ export default function DailyUpdate() {
             className="col-span-2"
             title="Narrative Pulse"
             sub="AI"
-            right={brief.data && <span className="pill accent">{brief.data.provider}{brief.data.fellBack ? ' (fallback)' : ''}</span>}
           >
             {brief.loading && <SkeletonLines lines={4} />}
             {brief.error && <div className="error-banner">{brief.error}</div>}

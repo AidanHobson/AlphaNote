@@ -67,7 +67,7 @@ export default function Economy() {
 
       {/* AI economic read */}
       <Card title="Economic Read" sub="AI" style={{ marginBottom: 16 }}
-        right={brief.data && <span className="pill accent">{brief.data.provider}{brief.data.fellBack ? ' (fallback)' : ''}</span>}>
+        right={brief.data && <span className="pill accent">AI{brief.data.fellBack ? ' (fallback)' : ''}</span>}>
         {brief.loading && <SkeletonLines lines={3} />}
         {brief.error && <div className="error-banner">{brief.error}</div>}
         {brief.data && <div className="ai-body" style={{ padding: 0 }}><AIText text={brief.data.text} /></div>}

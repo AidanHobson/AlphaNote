@@ -75,7 +75,7 @@ export default function Risk() {
           className="col-span-2"
           title="Risk Read"
           sub="AI"
-          right={brief.data && <span className="pill accent">{brief.data.provider}{brief.data.fellBack ? ' (fallback)' : ''}</span>}
+          right={brief.data && <span className="pill accent">AI{brief.data.fellBack ? ' (fallback)' : ''}</span>}
         >
           {brief.loading && <SkeletonLines lines={4} />}
           {brief.error && <div className="error-banner">{brief.error}</div>}
