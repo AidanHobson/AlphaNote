@@ -120,6 +120,24 @@ const fileLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
+// CSRF defense-in-depth: on state-changing methods, reject a request whose
+// Origin is cross-site. The session cookie is already SameSite=Lax (so a
+// browser won't attach it to a cross-site POST) — this is a second, explicit
+// barrier. A missing Origin is allowed: non-browser clients (curl, the test
+// runner, server-to-server) omit it and can't ride a victim's cookie anyway.
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+app.use('/api', (req, res, next) => {
+  if (!UNSAFE_METHODS.has(req.method)) return next();
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  let originHost;
+  try { originHost = new URL(origin).host; } catch { return res.status(403).json({ error: 'Invalid Origin header.' }); }
+  if (originHost !== req.headers.host) {
+    return res.status(403).json({ error: 'Cross-origin request rejected.' });
+  }
+  next();
+});
+
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 function requireFinnhub(res) {
   if (!process.env.FINNHUB_API_KEY) {
@@ -173,12 +191,15 @@ function streamNote(req, res, { scope, generate, save, errorMessage }) {
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
+// PUBLIC: liveness + a readiness summary (which integrations are configured).
+// Deliberately omits version/operational intel (deployed commit, backup timing,
+// failing-source names) — that's free recon for an unauthenticated caller (e.g.
+// pinning the exact commit to a known CVE). The full operational view lives at
+// the admin-only /api/admin/health below; uptime monitors only need `ok`.
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     app: 'AlphaNote',
-    // Which build is actually serving — Render injects RENDER_GIT_COMMIT.
-    commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
     integrations: {
       finnhub: Boolean(process.env.FINNHUB_API_KEY),
       eodhd: isEodhdConfigured(),
@@ -190,18 +211,6 @@ app.get('/api/health', (req, res) => {
         gemini: isProviderConfigured('gemini'),
       },
     },
-    warmer: warmerStatus(),
-    // Operational signals so an external uptime monitor can alert on more than
-    // up/down: when the newest backup is, and any data source that's failing.
-    backups: (() => {
-      try {
-        const list = listBackups();
-        return { count: list.length, newestAt: list[0]?.createdAt ?? null };
-      } catch { return { count: 0, newestAt: null }; }
-    })(),
-    sources: listSourceHealth()
-      .filter((s) => s.status === 'failing' || s.status === 'stale')
-      .map((s) => ({ name: s.name, status: s.status })),
   });
 });
 
@@ -303,6 +312,25 @@ app.post('/api/admin/users/:id/approve', requireAdmin, (req, res) => {
 app.post('/api/admin/users/:id/disable', requireAdmin, (req, res) => {
   const ok = setUserStatus(Number(req.params.id), 'disabled');
   res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'User not found.' });
+});
+
+// ── Admin: operational health (the version/ops intel kept out of public /health) ─
+app.get('/api/admin/health', requireAdmin, (req, res) => {
+  res.json({
+    ok: true,
+    // Which build is actually serving — Render injects RENDER_GIT_COMMIT.
+    commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
+    warmer: warmerStatus(),
+    backups: (() => {
+      try {
+        const list = listBackups();
+        return { count: list.length, newestAt: list[0]?.createdAt ?? null };
+      } catch { return { count: 0, newestAt: null }; }
+    })(),
+    sources: listSourceHealth()
+      .filter((s) => s.status === 'failing' || s.status === 'stale')
+      .map((s) => ({ name: s.name, status: s.status })),
+  });
 });
 
 // ── Admin: recent server errors (in-app ring buffer, redacted) ────────────────

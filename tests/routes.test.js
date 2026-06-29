@@ -19,6 +19,35 @@ describe('routes (integration)', () => {
     expect(res.body.integrations).toBeTruthy();
   });
 
+  it('public /api/health withholds version/operational intel', async () => {
+    const res = await request(app).get('/api/health');
+    // These moved to the admin-only /api/admin/health — they must not leak publicly.
+    expect(res.body.commit).toBeUndefined();
+    expect(res.body.sources).toBeUndefined();
+    expect(res.body.backups).toBeUndefined();
+    expect(res.body.warmer).toBeUndefined();
+  });
+
+  it('rejects a cross-origin state-changing request (CSRF guard)', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', 'https://evil.example')
+      .send({ username: 'whoever', password: TEST_PW });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/cross-origin/i);
+  });
+
+  it('allows a same-origin state-changing request through the CSRF guard', async () => {
+    // Same host in Origin and Host → not cross-origin; passes the guard and is
+    // handled by the route (invalid creds → 401, i.e. it was NOT blocked at 403).
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Host', 'alphanote.test')
+      .set('Origin', 'https://alphanote.test')
+      .send({ username: 'nobody', password: TEST_PW });
+    expect(res.status).not.toBe(403);
+  });
+
   it('gates the /api surface behind authentication', async () => {
     const res = await request(app).get('/api/notes/history');
     expect(res.status).toBe(401);
