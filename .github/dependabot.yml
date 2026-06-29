@@ -1,0 +1,18 @@
+# Keep dependencies and CI actions patched. Dependabot opens grouped PRs weekly;
+# CI (build + typecheck + tests + npm audit) gates each one before merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine minor/patch bumps; majors stay separate for review.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

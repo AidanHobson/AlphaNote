@@ -100,6 +100,14 @@ export function createSession(userId) {
 }
 export function destroySession(token) { if (token) q.deleteSession.run(token); }
 
+// Sessions are deleted lazily when an expired token is presented again — but a
+// token that simply goes stale (its owner never returns) sits in the table
+// forever. A periodic sweep keeps the sessions table from growing without bound.
+const qPurgeExpired = db.prepare('DELETE FROM sessions WHERE expires_at < ?');
+export function purgeExpiredSessions(now = Date.now()) {
+  return qPurgeExpired.run(now).changes;
+}
+
 export function userForToken(token) {
   if (!token) return null;
   const s = q.sessionByToken.get(token);
