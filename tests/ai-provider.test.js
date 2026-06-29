@@ -62,9 +62,13 @@ describe('callAIWithFallback — timeout & fallback', () => {
     json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
   });
 
+  // Route by exact host (not a substring match — that trips CodeQL's
+  // incomplete-URL-sanitization rule and is the wrong way to compare URLs).
+  const isAnthropic = (url) => { try { return new URL(url).hostname === 'api.anthropic.com'; } catch { return false; } };
+
   it('aborts a hung primary and transparently falls back to the secondary', async () => {
     global.fetch = vi.fn((url, init) =>
-      (String(url).includes('anthropic.com') ? hang(init) : geminiOk('fallback answer')));
+      (isAnthropic(url) ? hang(init) : geminiOk('fallback answer')));
 
     const out = await callAIWithFallback('hi', 'sys', { timeoutMs: 50 });
     expect(out.provider).toBe('gemini');
