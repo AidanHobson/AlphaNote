@@ -4,7 +4,8 @@ import type { Insight } from '../lib/models';
 import AIText from './AIText';
 import { SkeletonLines } from './Skeleton';
 
-const providerLabel = (p: string) => ({ claude: 'Claude (Anthropic)', gemini: 'Gemini (Google)' }[p] || p);
+// Model-agnostic — never surface the underlying model's name in the UI.
+const providerLabel = (_p: string) => 'AI';
 
 export default function AIInsight({ symbol, onInsight }: { symbol: string; onInsight?: (i: Insight) => void }) {
   const [state, setState] = useState<{ loading: boolean; data?: Insight; error?: string }>({ loading: true });

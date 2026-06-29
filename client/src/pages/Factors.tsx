@@ -61,7 +61,7 @@ export default function Factors() {
         </Card>
 
         <Card className="col-span-2" title="Factor Read" sub="AI"
-          right={brief.data && <span className="pill accent">{brief.data.provider}{brief.data.fellBack ? ' (fallback)' : ''}</span>}>
+          right={brief.data && <span className="pill accent">AI{brief.data.fellBack ? ' (fallback)' : ''}</span>}>
           {brief.loading && <SkeletonLines lines={4} />}
           {brief.error && <div className="error-banner">{brief.error}</div>}
           {brief.data && <div className="ai-body" style={{ padding: 0 }}><AIText text={brief.data.text} /></div>}

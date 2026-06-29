@@ -39,5 +39,5 @@ export function timeAgo(unixSeconds: number): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export const providerLabel = (p: string): string =>
-  ({ claude: 'Claude (Anthropic)', gemini: 'Gemini (Google)' } as Record<string, string>)[p] || p;
+// The UI is model-agnostic — it never surfaces the underlying model's name.
+export const providerLabel = (_p: string): string => 'AI';
