@@ -27,6 +27,12 @@ db-backups/
 # local editor / preview tooling
 .claude/
 
+# Playwright e2e artifacts
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
 # local scan reports
 findings.json
 results.sarif

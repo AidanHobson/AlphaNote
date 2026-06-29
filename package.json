@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "start": "NODE_ENV=production node server/index.js",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.2.0",
