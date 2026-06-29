@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { getProviderConfig, isProviderConfigured } from '../server/lib/ai-provider.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getProviderConfig, isProviderConfigured, callAIWithFallback } from '../server/lib/ai-provider.js';
 
 describe('getProviderConfig', () => {
   beforeEach(() => {
@@ -34,5 +34,47 @@ describe('isProviderConfigured', () => {
     expect(isProviderConfigured('claude')).toBe(true);
     process.env.ANTHROPIC_API_KEY = '';
     expect(isProviderConfigured('claude')).toBe(false);
+  });
+});
+
+describe('callAIWithFallback — timeout & fallback', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => {
+    process.env.AI_PROVIDER = 'claude';
+    process.env.AI_FALLBACK_PROVIDER = 'gemini';
+    process.env.ANTHROPIC_API_KEY = 'sk-test';
+    process.env.GEMINI_API_KEY = 'gm-test';
+  });
+  afterEach(() => {
+    global.fetch = realFetch;
+    delete process.env.AI_PROVIDER;
+    delete process.env.AI_FALLBACK_PROVIDER;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+  });
+
+  // A connection that never responds, but honours abort — like a stalled provider.
+  const hang = (init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  });
+  const geminiOk = (text) => Promise.resolve({
+    ok: true,
+    json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
+  });
+
+  it('aborts a hung primary and transparently falls back to the secondary', async () => {
+    global.fetch = vi.fn((url, init) =>
+      (String(url).includes('anthropic.com') ? hang(init) : geminiOk('fallback answer')));
+
+    const out = await callAIWithFallback('hi', 'sys', { timeoutMs: 50 });
+    expect(out.provider).toBe('gemini');
+    expect(out.fellBack).toBe(true);
+    expect(out.text).toBe('fallback answer');
+  });
+
+  it('reports a clear timeout error when both providers stall', async () => {
+    global.fetch = vi.fn((url, init) => hang(init));
+    await expect(callAIWithFallback('hi', 'sys', { timeoutMs: 30 }))
+      .rejects.toThrow(/timed out/);
   });
 });

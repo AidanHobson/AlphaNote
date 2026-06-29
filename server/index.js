@@ -42,7 +42,7 @@ import {
   validateCredentials, registerUser, verifyLogin, createSession, destroySession,
   attachUser, requireAuth, requireAdmin, isAdminUsername, sessionCookie, clearCookie, isSecureRequest,
   getUserState, putUserState, publicUser, listUsers, setUserStatus,
-  changePassword, destroyAllSessions,
+  changePassword, destroyAllSessions, purgeExpiredSessions,
 } from './lib/auth.js';
 import { isProviderConfigured } from './lib/ai-provider.js';
 
@@ -792,5 +792,8 @@ if (isEntry) app.listen(PORT, () => {
     setTimeout(refresh, 90_000); // after boot, clear of the warmer's first pass
     setInterval(refresh, 50 * 60_000);
   }
+  // Sweep expired sessions on boot, then hourly, so stale rows don't accumulate.
+  purgeExpiredSessions();
+  setInterval(() => { try { purgeExpiredSessions(); } catch { /* non-fatal */ } }, 60 * 60_000).unref?.();
   console.log(`  Cache warmer: ${warming ? 'started (movers / commodities / macro kept warm)' : 'off'}  |  Buzz history: ${buzzing ? 'on (50min)' : 'off'}  |  DB backups: ${backups ? 'daily (keep 7)' : 'off'}\n`);
 });

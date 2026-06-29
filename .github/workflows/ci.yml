@@ -30,6 +30,10 @@ jobs:
         run: npm run build
       - name: Run tests (Vitest)
         run: npm test
+      # Fail the build on a known high/critical advisory in a *production*
+      # dependency (dev-only tooling is excluded to avoid noise that can't ship).
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
   secret-scan:
     runs-on: ubuntu-latest

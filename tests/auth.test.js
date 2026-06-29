@@ -92,6 +92,21 @@ describe('changePassword / destroyAllSessions', () => {
     expect(A.destroyAllSessions(u.id)).toBe(3);
     toks.forEach((t) => expect(A.userForToken(t)).toBeNull());
   }, 20000);
+
+  it('purgeExpiredSessions sweeps only sessions past their expiry', async () => {
+    const u = await A.registerUser('sweeper', 'correcthorse9');
+    A.setUserStatus(u.id, 'active');
+    const tok = A.createSession(u.id);
+    expect(A.userForToken(tok)).toMatchObject({ username: 'sweeper' });
+    // Nothing is expired "now", so a present-time sweep removes nothing of his.
+    const tooEarly = A.purgeExpiredSessions(Date.now() - 1);
+    expect(A.userForToken(tok)).toMatchObject({ username: 'sweeper' });
+    // Sweep with a clock past the 7-day TTL → the stale row is removed.
+    const removed = A.purgeExpiredSessions(Date.now() + 8 * 24 * 3600 * 1000);
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(A.userForToken(tok)).toBeNull();
+    expect(tooEarly).toBeLessThan(removed);
+  }, 20000);
 });
 
 describe('approval flow', () => {
